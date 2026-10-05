@@ -27,6 +27,9 @@ export const API_KEYS = {
   DELETE_COMPLAINT:
     process.env.NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY ||
     "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
+  MAP_POINTS:
+    process.env.NEXT_PUBLIC_MAP_POINTS_API_KEY ||
+    "5SjJvF8lvgiMb54IHNiwr4KYrsyX4eGyEfvZD61RZC8",
 };
 
 // All API Endpoints defined in one common dictionary
@@ -52,6 +55,19 @@ export const API_ENDPOINTS = {
     `${API_BASE_URL}/api/complaints/${encodeURIComponent(trackingId)}/status`,
   DELETE_COMPLAINT: (trackingId) =>
     `${API_BASE_URL}/api/complaints/${encodeURIComponent(trackingId)}`,
+  MAP_POINTS: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.min_lat != null)
+      searchParams.set("min_lat", String(params.min_lat));
+    if (params.max_lat != null)
+      searchParams.set("max_lat", String(params.max_lat));
+    if (params.min_lng != null)
+      searchParams.set("min_lng", String(params.min_lng));
+    if (params.max_lng != null)
+      searchParams.set("max_lng", String(params.max_lng));
+    const qs = searchParams.toString();
+    return `${API_BASE_URL}/api/map/points${qs ? `?${qs}` : ""}`;
+  },
 };
 
 /**
@@ -312,3 +328,37 @@ export async function deleteComplaint(trackingId, reason, deletedBy = "admin") {
 
   return result;
 }
+
+/**
+ * Fetch map points and hotspots for civic incidents with optional bounding coordinates.
+ *
+ * @param {Object} [params]
+ * @param {number|string} [params.min_lat]
+ * @param {number|string} [params.max_lat]
+ * @param {number|string} [params.min_lng]
+ * @param {number|string} [params.max_lng]
+ * @returns {Promise<Object>} API response object { success: true, data: [...], meta: {...}, hotspots: [...] }
+ */
+export async function getMapPoints(params = {}) {
+  const url = API_ENDPOINTS.MAP_POINTS(params);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEYS.MAP_POINTS,
+    },
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Failed to fetch map points (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return result;
+}
+
