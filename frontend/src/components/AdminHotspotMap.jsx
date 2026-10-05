@@ -93,6 +93,29 @@ function formatTimeAgo(isoString) {
   }
 }
 
+// Helper to determine if an incident is high severity or overdue (>5 days from created_at)
+function checkIsHighSeverity(item) {
+  if (!item) return false;
+  // If created at + 5 days is < today, it is considered as high severity
+  const createdAt = item.createdAt || item.created_at;
+  if (createdAt) {
+    const createdTime = new Date(createdAt).getTime();
+    if (!isNaN(createdTime)) {
+      const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+      if (Date.now() > createdTime + fiveDaysMs) {
+        return true;
+      }
+    }
+  }
+
+  // If severity is directly high
+  if (String(item.severity || "").toLowerCase() === "high") {
+    return true;
+  }
+
+  return Boolean(item.isHighSeverity) || Boolean(item.isOverdue);
+}
+
 // Helper to render individual marker pin
 function renderSingleMarker(L, item, layer, onSelect) {
   const categoryKey = (item.category || "pothole").toLowerCase();
@@ -101,12 +124,13 @@ function renderSingleMarker(L, item, layer, onSelect) {
     border: "#2563eb",
     label: item.category || "Incident",
   };
-  const isUrgentOrOverdue = item.isUrgent || item.isOverdue;
+  const isHighSev = checkIsHighSeverity(item);
+  const showPulsatingRing = isHighSev || Boolean(item.isUrgent);
 
   const markerHtml = `
     <div class="relative cursor-pointer select-none group pin-drop-animate">
       ${
-        isUrgentOrOverdue
+        showPulsatingRing
           ? `<div class="absolute -inset-2.5 rounded-full pulse-ring-urgent pointer-events-none"></div>`
           : ""
       }
@@ -185,15 +209,23 @@ export default function AdminHotspotMap() {
           const categoryCapitalized =
             category.charAt(0).toUpperCase() + category.slice(1);
 
+          const rawSeverity = (item.severity || "medium").toLowerCase();
+          const createdAt = item.created_at;
+          const isOverdue = createdAt
+            ? Date.now() > new Date(createdAt).getTime() + 5 * 24 * 60 * 60 * 1000
+            : false;
+          const effectiveSeverity = isOverdue ? "high" : rawSeverity;
+
           return {
             id: trackingId,
             tracking_id: trackingId,
             title: `${categoryCapitalized} (${trackingId})`,
             category: category,
             status: item.status || "pending",
-            severity: item.severity || "medium",
+            severity: effectiveSeverity,
+            isHighSeverity: effectiveSeverity === "high",
             isUrgent: Boolean(item.is_urgent),
-            isOverdue: false,
+            isOverdue: isOverdue,
             lat,
             lng,
             locationName: trackingId,
@@ -258,7 +290,7 @@ export default function AdminHotspotMap() {
         const clustersByLocation = {};
         livePoints.forEach((g) => {
           const coordKey = `${Number(g.lat).toFixed(3)}_${Number(g.lng).toFixed(3)}`;
-          const key = g.parent_tracking_id || coordKey;
+          const key = coordKey;
           if (!clustersByLocation[key]) {
             clustersByLocation[key] = [];
           }
@@ -592,13 +624,13 @@ export default function AdminHotspotMap() {
 
       const currentZoom = map.getZoom();
 
-      // Group co-located or parent-linked points for clustering
+      // Group co-located or nearby points for clustering
       const clusters = {};
 
       filteredGrievances.forEach((g) => {
-        // Group points by parent tracking id or coordinates rounded to 3 decimals (~100m)
+        // Group points by coordinates rounded to 3 decimals (~100m)
         const coordKey = `${Number(g.lat).toFixed(3)}_${Number(g.lng).toFixed(3)}`;
-        const clusterKey = g.parent_tracking_id || coordKey;
+        const clusterKey = coordKey;
 
         if (!clusters[clusterKey]) {
           clusters[clusterKey] = [];
@@ -611,7 +643,9 @@ export default function AdminHotspotMap() {
           if (currentZoom < 16) {
             // Render Single Combined Cluster Marker
             const rep = group[0];
-            const hasUrgent = group.some((g) => g.isUrgent || g.isOverdue);
+            const hasHighSeverityOrUrgent = group.some(
+              (g) => checkIsHighSeverity(g) || Boolean(g.isUrgent)
+            );
             const totalCount = group.reduce(
               (acc, curr) => acc + (curr.report_count > 1 ? curr.report_count : 1),
               0,
@@ -620,7 +654,7 @@ export default function AdminHotspotMap() {
             const clusterHtml = `
               <div class="relative cursor-pointer select-none group">
                 ${
-                  hasUrgent
+                  hasHighSeverityOrUrgent
                     ? `<div class="absolute -inset-2 rounded-full pulse-ring-urgent pointer-events-none"></div>`
                     : ""
                 }
@@ -649,15 +683,20 @@ export default function AdminHotspotMap() {
             });
             clusterMarker.addTo(markersLayer);
           } else {
-            // Zoom is 16+: Render individual markers (jitter if at exact same coordinate so all are visible)
+            // Zoom is 16+: Render individual markers (jitter if co-located so all pins are visible)
             group.forEach((item, idx) => {
-              if (
+              const isCoLocated =
                 group.length > 1 &&
-                item.lat === group[0].lat &&
-                item.lng === group[0].lng
-              ) {
+                group.some(
+                  (other, oIdx) =>
+                    oIdx !== idx &&
+                    Math.abs(other.lat - item.lat) < 0.0003 &&
+                    Math.abs(other.lng - item.lng) < 0.0003
+                );
+
+              if (isCoLocated) {
                 const angle = (2 * Math.PI * idx) / group.length;
-                const offset = 0.00018; // ~20 meters
+                const offset = 0.00022; // ~25 meters
                 const jitteredItem = {
                   ...item,
                   lat: item.lat + offset * Math.cos(angle),
@@ -895,7 +934,7 @@ export default function AdminHotspotMap() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
                 </span>
-                <span>Pulsating Ring = Urgent / Overdue</span>
+                <span>Pulsating Ring = High Severity / &gt;5 Days Old</span>
               </div>
             </div>
           </div>
@@ -1039,6 +1078,22 @@ export default function AdminHotspotMap() {
                       className="text-xs capitalize font-medium text-slate-600 dark:text-slate-300"
                     >
                       {selectedGrievance.department}
+                    </Badge>
+                  )}
+                  {checkIsHighSeverity(selectedGrievance) && (
+                    <Badge
+                      variant="destructive"
+                      className="text-[10px] uppercase font-bold bg-rose-600 hover:bg-rose-700"
+                    >
+                      High Severity
+                    </Badge>
+                  )}
+                  {selectedGrievance.isOverdue && (
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] uppercase font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300"
+                    >
+                      &gt;5 Days Old
                     </Badge>
                   )}
                   {selectedGrievance.isUrgent && (
