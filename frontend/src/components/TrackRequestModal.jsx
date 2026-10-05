@@ -38,6 +38,18 @@ const STATUS_STYLES = {
       "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300",
     dotClass: "bg-amber-500",
   },
+  deleted: {
+    label: "Deleted",
+    badgeClass:
+      "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300",
+    dotClass: "bg-rose-500",
+  },
+  rejected: {
+    label: "Rejected",
+    badgeClass:
+      "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-300",
+    dotClass: "bg-rose-500",
+  },
 };
 
 function formatTimestamp(isoString) {
