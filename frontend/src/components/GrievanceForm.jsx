@@ -116,7 +116,7 @@ export default function GrievanceForm() {
     e.preventDefault();
     setErrorMessage(null);
 
-    // Form Validations
+    // Form Validations: image and location are compulsory
     if (!imageFile) {
       setErrorMessage(
         "Please capture or upload an infrastructure issue photo (Max 10 MB).",
@@ -124,7 +124,7 @@ export default function GrievanceForm() {
       return;
     }
 
-    if (!location || !location.latitude || !location.longitude) {
+    if (!location || location.latitude == null || location.longitude == null) {
       setErrorMessage(
         "Incident location coordinates are required. Please use browser GPS or enter coordinates manually.",
       );
@@ -134,37 +134,46 @@ export default function GrievanceForm() {
     setIsSubmitting(true);
 
     try {
+      // Build FormData with exact API fields: image, lat, lng, text (optional), audio (optional)
       const formData = new FormData();
       formData.append("image", imageFile);
-      if (voiceNoteFile) {
-        formData.append("voiceNote", voiceNoteFile);
-      }
-      if (textNote.trim()) {
-        formData.append("textNote", textNote.trim());
-      }
-      formData.append("latitude", location.latitude.toString());
-      formData.append("longitude", location.longitude.toString());
-      formData.append("locationSource", location.source || "unknown");
-      formData.append("submittedAt", new Date().toISOString());
+      formData.append("lat", location.latitude.toString());
+      formData.append("lng", location.longitude.toString());
 
-      const response = await fetch("/api/grievance", {
+      if (textNote.trim()) {
+        formData.append("text", textNote.trim());
+      }
+
+      if (voiceNoteFile) {
+        formData.append("audio", voiceNoteFile);
+      }
+
+      const response = await fetch("/api/complaints", {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        const resData = await response.json().catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
         throw new Error(
-          resData.error || "Failed to submit grievance. Please try again.",
+          result.error || "Failed to submit grievance. Please try again.",
         );
       }
 
-      const result = await response.json();
+      const complaintData = result.data || {};
+      const trackingId =
+        complaintData.tracking_id ||
+        result.ticketId ||
+        `RIF-${Math.floor(100000 + Math.random() * 900000)}`;
 
       setSuccessData({
-        ticketId:
-          result.ticketId ||
-          `CIGA-${Math.floor(100000 + Math.random() * 900000)}`,
+        ticketId: trackingId,
+        category: complaintData.category || "General",
+        status: complaintData.status || "pending",
+        severity: complaintData.severity,
+        department: complaintData.department,
+        summary: complaintData.summary,
         imageName: imageFile.name,
         imageSize: (imageFile.size / (1024 * 1024)).toFixed(2) + " MB",
         hasVoiceNote: Boolean(voiceNoteFile),
@@ -212,7 +221,7 @@ export default function GrievanceForm() {
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-800">
               <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">
-                Ticket Reference
+                Tracking ID
               </span>
               <span className="font-mono font-bold text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2.5 py-1 rounded">
                 {successData.ticketId}
@@ -220,6 +229,33 @@ export default function GrievanceForm() {
             </div>
 
             <div className="space-y-3 text-sm">
+              {successData.category && (
+                <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-500">Category:</span>
+                  <Badge variant="outline" className="capitalize text-xs font-semibold">
+                    {successData.category}
+                  </Badge>
+                </div>
+              )}
+
+              {successData.status && (
+                <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-500">Status:</span>
+                  <Badge className="capitalize text-xs font-medium bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300">
+                    {successData.status}
+                  </Badge>
+                </div>
+              )}
+
+              {successData.summary && (
+                <div className="pt-1 pb-1">
+                  <span className="text-xs text-slate-500 block mb-1">AI Summary:</span>
+                  <p className="text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                    {successData.summary}
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
                 <span className="text-slate-500 flex items-center gap-1.5">
                   <ImageIcon className="w-4 h-4 text-slate-400" /> Image:
@@ -253,14 +289,14 @@ export default function GrievanceForm() {
 
               {successData.hasVoiceNote && (
                 <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
-                  <span className="text-slate-500">Voice Note:</span>
-                  <Badge variant="success" className="text-xs">
-                    Recorded Audio Attached
+                  <span className="text-slate-500">Audio Recorded:</span>
+                  <Badge variant="secondary" className="text-xs font-medium">
+                    Voice Note Attached
                   </Badge>
                 </div>
               )}
 
-              {successData.textNote && (
+              {successData.textNote && successData.textNote !== "No text description provided" && (
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
                   <span className="text-xs text-slate-500">Description:</span>
                   <p className="text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">

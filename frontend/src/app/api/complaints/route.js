@@ -14,10 +14,13 @@ export async function POST(request) {
     const audio =
       incomingFormData.get("audio") || incomingFormData.get("voiceNote");
 
-    // Validation
+    // Compulsory field validation: image and location (lat, lng)
     if (!image || typeof image === "string") {
       return NextResponse.json(
-        { success: false, error: "Infrastructure issue image is required." },
+        {
+          success: false,
+          error: "Infrastructure issue photo is compulsory.",
+        },
         { status: 400 }
       );
     }
@@ -26,7 +29,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Location coordinates (latitude and longitude) are required.",
+          error: "Incident location coordinates (lat and lng) are compulsory.",
         },
         { status: 400 }
       );
@@ -39,12 +42,13 @@ export async function POST(request) {
       process.env.COMPLAINTS_API_KEY ||
       "e5q2V2sJkkdEQUXe_-ETzy3UjrQreotz8QrT5gcHqKU";
 
-    // Prepare outbound FormData
+    // Prepare outbound FormData matching backend expectations
     const outboundFormData = new FormData();
     outboundFormData.append("image", image);
     outboundFormData.append("lat", lat.toString());
     outboundFormData.append("lng", lng.toString());
 
+    // Optional fields: text and audio
     if (text && typeof text === "string" && text.trim()) {
       outboundFormData.append("text", text.trim());
     }
@@ -67,6 +71,7 @@ export async function POST(request) {
       return NextResponse.json(responseData, { status: 201 });
     }
 
+    // Backend returned an error response
     const errorMessage =
       responseData?.error?.message ||
       responseData?.error ||
@@ -82,11 +87,11 @@ export async function POST(request) {
       { status: backendResponse.status || 400 }
     );
   } catch (error) {
-    console.error("Grievance submission API error:", error);
+    console.error("Complaints submission error:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Internal server error processing grievance report.",
+        error: error.message || "Failed to submit grievance to the server.",
       },
       { status: 500 }
     );
