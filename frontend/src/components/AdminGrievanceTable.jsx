@@ -120,9 +120,11 @@ export default function AdminGrievanceTable() {
   const [deleteError, setDeleteError] = useState(null);
 
   // Fetch Complaints from Backend API
-  const fetchComplaints = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
+  const fetchComplaints = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoading(true);
+      setErrorMessage(null);
+    }
 
     try {
       const params = {
@@ -146,16 +148,20 @@ export default function AdminGrievanceTable() {
         if (res.meta) {
           setMeta(res.meta);
         }
-      } else {
+      } else if (!isBackground) {
         setErrorMessage(
           res?.error || "Failed to load complaints from backend.",
         );
       }
     } catch (err) {
-      console.error("Error fetching complaints list:", err);
-      setErrorMessage(err.message || "Network error loading complaints list.");
+      if (!isBackground) {
+        console.error("Error fetching complaints list:", err);
+        setErrorMessage(err.message || "Network error loading complaints list.");
+      }
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
   }, [page, limit, sortOrder, statusFilter, categoryFilter]);
 
@@ -164,13 +170,44 @@ export default function AdminGrievanceTable() {
 
     const timer = setTimeout(() => {
       if (!isCancelled) {
-        fetchComplaints();
+        fetchComplaints(false);
       }
     }, 0);
 
     return () => {
       isCancelled = true;
       clearTimeout(timer);
+    };
+  }, [fetchComplaints]);
+
+  // Periodic poll every 3 seconds to keep table updated with newly submitted complaints
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchComplaints(true);
+    }, 3000);
+
+    const handleSync = () => {
+      fetchComplaints(true);
+    };
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel("ciga_live_complaints");
+      bc.onmessage = (e) => {
+        if (e?.data?.type === "NEW_COMPLAINT") {
+          handleSync();
+        }
+      };
+    } catch {}
+
+    window.addEventListener("ciga_live_complaint", handleSync);
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      clearInterval(interval);
+      if (bc) bc.close();
+      window.removeEventListener("ciga_live_complaint", handleSync);
+      window.removeEventListener("storage", handleSync);
     };
   }, [fetchComplaints]);
 

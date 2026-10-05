@@ -166,6 +166,21 @@ export default function GrievanceForm() {
           minute: "2-digit",
         }),
       });
+
+      // Broadcast new complaint instantly to admin panel (same window and other tabs)
+      if (typeof window !== "undefined") {
+        try {
+          const bc = new BroadcastChannel("ciga_live_complaints");
+          bc.postMessage({ type: "NEW_COMPLAINT", data: complaintData });
+          bc.close();
+        } catch {}
+        window.dispatchEvent(
+          new CustomEvent("ciga_live_complaint", { detail: complaintData })
+        );
+        try {
+          localStorage.setItem("ciga_last_submission", String(Date.now()));
+        } catch {}
+      }
     } catch (err) {
       console.error("Submission error:", err);
       setErrorMessage(

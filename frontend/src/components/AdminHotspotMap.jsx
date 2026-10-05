@@ -169,6 +169,8 @@ export default function AdminHotspotMap() {
   const mapContainerRef = useRef(null);
   const leafletMapRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const knownTrackingIdsRef = useRef(new Set());
+  const hasInitialFitRef = useRef(false);
 
   // Core Data
   const [grievances, setGrievances] = useState([]);
@@ -188,12 +190,13 @@ export default function AdminHotspotMap() {
 
   // SSE & Live Incident Notification
   const [isSseConnected, setIsSseConnected] = useState(false);
-  const [liveToast, setLiveToast] = useState(null);
 
   // Fetch live map points and clusters from backend API
-  const fetchMapData = useCallback(async () => {
-    setIsLoadingMap(true);
-    setMapError(null);
+  const fetchMapData = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoadingMap(true);
+      setMapError(null);
+    }
 
     try {
       const result = await getMapPoints();
@@ -282,8 +285,29 @@ export default function AdminHotspotMap() {
           };
         });
 
+        const isFirstLoad = knownTrackingIdsRef.current.size === 0;
+
+        // Update known tracking IDs set
+        livePoints.forEach((point) => {
+          knownTrackingIdsRef.current.add(point.tracking_id);
+        });
+
         if (livePoints.length > 0) {
-          setGrievances(livePoints);
+          setGrievances((prev) => {
+            if (prev.length !== livePoints.length) {
+              return livePoints;
+            }
+            const hasChanges = livePoints.some((p) => {
+              const old = prev.find((item) => item.tracking_id === p.tracking_id);
+              return (
+                !old ||
+                old.status !== p.status ||
+                old.severity !== p.severity ||
+                old.report_count !== p.report_count
+              );
+            });
+            return hasChanges ? livePoints : prev;
+          });
         }
 
         // Build comprehensive hotspots list from backend hotspots + local detected clusters
@@ -376,12 +400,12 @@ export default function AdminHotspotMap() {
           .map((h, i) => ({ ...h, rank: i + 1 }));
 
         setAllHotspots(sortedHotspots);
-        if (sortedHotspots.length > 0) {
+        if (sortedHotspots.length > 0 && isFirstLoad) {
           setActiveHotspotId(sortedHotspots[0].id);
         }
 
-        // Fit map bounds to points if map is ready
-        if (leafletMapRef.current && livePoints.length > 0) {
+        // Fit map bounds to points only on first load
+        if (leafletMapRef.current && livePoints.length > 0 && !hasInitialFitRef.current) {
           import("leaflet").then((L) => {
             const validCoords = livePoints
               .filter((p) => !isNaN(p.lat) && !isNaN(p.lng) && p.lat !== 0)
@@ -392,20 +416,66 @@ export default function AdminHotspotMap() {
                 padding: [45, 45],
                 maxZoom: 15,
               });
+              hasInitialFitRef.current = true;
             }
           });
         }
       }
     } catch (err) {
-      console.error("Failed to fetch live map points:", err);
-      setMapError(err.message || "Failed to load live map points");
+      if (!isBackground) {
+        console.error("Failed to fetch live map points:", err);
+        setMapError(err.message || "Failed to load live map points");
+      }
     } finally {
-      setIsLoadingMap(false);
+      if (!isBackground) {
+        setIsLoadingMap(false);
+      }
     }
   }, []);
 
+  // Auto-poll every 2.5 seconds to detect and display new complaints within 3 seconds
   useEffect(() => {
-    fetchMapData();
+    fetchMapData(false);
+
+    const pollInterval = setInterval(() => {
+      fetchMapData(true);
+    }, 2500);
+
+    return () => clearInterval(pollInterval);
+  }, [fetchMapData]);
+
+  // Instant refresh listener for in-app or cross-tab complaint submissions
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const triggerRefresh = () => {
+      fetchMapData(true);
+    };
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel("ciga_live_complaints");
+      bc.onmessage = (event) => {
+        if (event?.data?.type === "NEW_COMPLAINT") {
+          triggerRefresh();
+        }
+      };
+    } catch {}
+
+    window.addEventListener("ciga_live_complaint", triggerRefresh);
+
+    const handleStorage = (e) => {
+      if (e.key === "ciga_last_submission") {
+        triggerRefresh();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      if (bc) bc.close();
+      window.removeEventListener("ciga_live_complaint", triggerRefresh);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, [fetchMapData]);
 
   // On-demand API call when clicking a particular marker
@@ -522,27 +592,13 @@ export default function AdminHotspotMap() {
 
   // Handle incoming live complaint
   const handleIncomingLiveReport = (newReport) => {
-    setGrievances((prev) => [newReport, ...prev]);
-
-    // Fly to new complaint on map
-    if (leafletMapRef.current) {
-      leafletMapRef.current.flyTo([newReport.lat, newReport.lng], 16, {
-        duration: 1.2,
-      });
-    }
-
-    // Show live alert banner
-    setLiveToast({
-      id: newReport.id,
-      title: newReport.title,
-      category: newReport.category,
-      address: newReport.address,
-      time: "Just now",
+    setGrievances((prev) => {
+      const exists = prev.some(
+        (g) => g.id === newReport.id || g.tracking_id === newReport.tracking_id
+      );
+      if (exists) return prev;
+      return [newReport, ...prev];
     });
-
-    setTimeout(() => {
-      setLiveToast(null);
-    }, 6000);
   };
 
   // Initialize Leaflet Map
@@ -771,36 +827,6 @@ export default function AdminHotspotMap() {
 
   return (
     <div className="space-y-4">
-      {/* Live Complaint Toast Alert */}
-      {liveToast && (
-        <div className="p-3.5 rounded-xl bg-blue-600 text-white shadow-xl flex items-center justify-between animate-in slide-in-from-top-3 duration-300">
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
-            </span>
-            <div>
-              <div className="text-xs font-bold flex items-center gap-2">
-                <span>⚡ Live Complaint Pin Dropped ({liveToast.id})</span>
-                <span className="text-[10px] uppercase px-1.5 py-0.2 bg-white/20 rounded font-mono">
-                  {liveToast.category}
-                </span>
-              </div>
-              <p className="text-[11px] text-white/90">
-                {liveToast.address} &bull; Received {liveToast.time}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setLiveToast(null)}
-            className="p-1 hover:bg-white/20 rounded-lg text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Main Map & Hotspot Box Section */}
       <Card className="border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
         {/* Top Control Bar with Filters & Refresh Button */}

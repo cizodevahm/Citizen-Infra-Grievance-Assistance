@@ -54,9 +54,11 @@ export default function AdminPage() {
   const [statsError, setStatsError] = useState(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
-  const loadDashboardStats = useCallback(async () => {
-    setIsLoadingStats(true);
-    setStatsError(null);
+  const loadDashboardStats = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoadingStats(true);
+      setStatsError(null);
+    }
     try {
       const response = await getAdminDashboardStats();
       if (response && response.success && response.data) {
@@ -68,14 +70,18 @@ export default function AdminPage() {
             second: "2-digit",
           }),
         );
-      } else {
+      } else if (!isBackground) {
         setStatsError(response?.error || "Failed to load dashboard metrics");
       }
     } catch (err) {
-      console.error("Dashboard stats error:", err);
-      setStatsError(err.message || "Failed to load live statistics");
+      if (!isBackground) {
+        console.error("Dashboard stats error:", err);
+        setStatsError(err.message || "Failed to load live statistics");
+      }
     } finally {
-      setIsLoadingStats(false);
+      if (!isBackground) {
+        setIsLoadingStats(false);
+      }
     }
   }, []);
 
@@ -93,7 +99,7 @@ export default function AdminPage() {
             });
           }
           setIsCheckingAuth(false);
-          loadDashboardStats();
+          loadDashboardStats(false);
         } else {
           router.push("/login");
         }
@@ -102,6 +108,39 @@ export default function AdminPage() {
 
     return () => clearTimeout(timer);
   }, [router, loadDashboardStats]);
+
+  // Periodic stats poll every 3 seconds to keep metrics in sync
+  useEffect(() => {
+    if (isCheckingAuth) return;
+
+    const interval = setInterval(() => {
+      loadDashboardStats(true);
+    }, 3000);
+
+    const handleSync = () => {
+      loadDashboardStats(true);
+    };
+
+    let bc = null;
+    try {
+      bc = new BroadcastChannel("ciga_live_complaints");
+      bc.onmessage = (e) => {
+        if (e?.data?.type === "NEW_COMPLAINT") {
+          handleSync();
+        }
+      };
+    } catch {}
+
+    window.addEventListener("ciga_live_complaint", handleSync);
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      clearInterval(interval);
+      if (bc) bc.close();
+      window.removeEventListener("ciga_live_complaint", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, [isCheckingAuth, loadDashboardStats]);
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
