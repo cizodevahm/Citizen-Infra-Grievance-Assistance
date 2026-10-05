@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { LogIn, Search, LogOut, UserCheck } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TrackRequestModal from "./TrackRequestModal";
 
@@ -63,7 +63,7 @@ export default function Navbar() {
               Track Request
             </Button>
 
-            {loggedInUser ? (
+            {loggedInUser && (
               <div className="flex items-center gap-2">
                 <Link href="/admin">
                   <Button
@@ -86,17 +86,6 @@ export default function Navbar() {
                   <span className="hidden sm:inline">Log Out</span>
                 </Button>
               </div>
-            ) : (
-              <Link href="/login">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 font-medium px-3.5 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200"
-                >
-                  <LogIn className="w-3.5 h-3.5 mr-1.5" />
-                  Log In
-                </Button>
-              </Link>
             )}
           </div>
         </div>
