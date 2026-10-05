@@ -18,6 +18,9 @@ export const API_KEYS = {
   ADMIN:
     process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
     "h7Dn_V0HqYBAKbdaACWVET3DAmVsbsuxoNKiOKjtx3s",
+  COMPLAINTS_LIST:
+    process.env.NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY ||
+    "l5VlqCYhtC9OCLT-3ifm0yJzciW-Yd6NV7mQ-48t2zk",
 };
 
 // All API Endpoints defined in one common dictionary
@@ -26,6 +29,19 @@ export const API_ENDPOINTS = {
   TRACK_COMPLAINT: (trackingId) =>
     `${API_BASE_URL}/api/complaints/track/${encodeURIComponent(trackingId)}`,
   ADMIN_STATS: `${API_BASE_URL}/api/admin/dashboard/stats`,
+  COMPLAINTS_LIST: (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.page != null) searchParams.set("page", String(params.page));
+    if (params.limit != null) searchParams.set("limit", String(params.limit));
+    if (params.sort_by) searchParams.set("sort_by", String(params.sort_by));
+    if (params.order) searchParams.set("order", String(params.order));
+    if (params.status && params.status !== "all")
+      searchParams.set("status", String(params.status));
+    if (params.category && params.category !== "all")
+      searchParams.set("category", String(params.category));
+    const qs = searchParams.toString();
+    return `${API_BASE_URL}/api/complaints${qs ? `?${qs}` : ""}`;
+  },
 };
 
 /**
@@ -147,6 +163,49 @@ export async function getAdminDashboardStats() {
       result?.message ||
       `Failed to fetch dashboard stats (${response.status})`;
     throw new Error(errorMsg);
+  }
+
+  return result;
+}
+
+/**
+ * Fetch paginated and filtered complaints list from the backend.
+ *
+ * @param {Object} [params]
+ * @param {number} [params.page=1]
+ * @param {number} [params.limit=10]
+ * @param {string} [params.sort_by="created_at"]
+ * @param {string} [params.order="desc"]
+ * @param {string} [params.status]
+ * @param {string} [params.category]
+ * @returns {Promise<Object>} API response object { success: true, data: [...], meta: { ... } }
+ */
+export async function getComplaintsList(params = {}) {
+  const url = API_ENDPOINTS.COMPLAINTS_LIST(params);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEYS.COMPLAINTS_LIST,
+    },
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Failed to fetch complaints list (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  // If raw_text exists, set user_message to raw_text
+  if (result.success && Array.isArray(result.data)) {
+    result.data = result.data.map((item) => ({
+      ...item,
+      user_message: item.raw_text || item.user_message,
+    }));
   }
 
   return result;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -8,190 +8,234 @@ import {
   Trash2,
   X,
   AlertCircle,
+  Loader2,
+  RefreshCw,
+  Eye,
+  MapPin,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Volume2,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
-// Initial mock requests
-const INITIAL_REQUESTS = [
-  {
-    id: "CIGA-849201-412",
-    category: "pothole",
-    status: "processing",
-    createdAt: "2026-10-05T10:30:00Z",
-    location: "S.G. Highway, Ward 12",
-    notes: "Deep pothole reported near junction.",
-  },
-  {
-    id: "CIGA-732104-981",
-    category: "streetlight",
-    status: "pending",
-    createdAt: "2026-10-05T09:15:00Z",
-    location: "Ring Road Sector 4",
-    notes: "Streetlight fixture flickering and dark at night.",
-  },
-  {
-    id: "CIGA-621908-112",
-    category: "water_leak",
-    status: "processing",
-    createdAt: "2026-10-04T16:45:00Z",
-    location: "Market Square Main Pipeline",
-    notes: "Water main leaking onto pedestrian sidewalk.",
-  },
-  {
-    id: "CIGA-519823-334",
-    category: "drain",
-    status: "completed",
-    createdAt: "2026-10-04T11:20:00Z",
-    location: "Civil Lines Crossroad",
-    notes: "Stormwater drain blocked by debris; cleared by squad.",
-  },
-  {
-    id: "CIGA-408712-556",
-    category: "pothole",
-    status: "pending",
-    createdAt: "2026-10-03T14:10:00Z",
-    location: "Ashram Road lane 3",
-    notes: "Multiple road craters reported by commuters.",
-  },
-  {
-    id: "CIGA-394812-778",
-    category: "streetlight",
-    status: "completed",
-    createdAt: "2026-10-02T19:50:00Z",
-    location: "Park Avenue Boulevard",
-    notes: "Bulb replaced and timer calibrated.",
-  },
-  {
-    id: "CIGA-283719-889",
-    category: "water_leak",
-    status: "pending",
-    createdAt: "2026-10-02T08:05:00Z",
-    location: "Heritage Colony Gate 2",
-    notes: "Underground pipe seepage detected.",
-  },
-  {
-    id: "CIGA-172608-990",
-    category: "drain",
-    status: "processing",
-    createdAt: "2026-10-01T15:30:00Z",
-    location: "Metro Station Exit B",
-    notes: "Drain grate damaged and open.",
-  },
-];
+import { getComplaintsList } from "@/lib/api";
 
 // Category label helper
 const CATEGORY_MAP = {
-  pothole: { label: "Pothole", badgeClass: "bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800" },
-  streetlight: { label: "Streetlight", badgeClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800" },
-  "water leak": { label: "Water Leak", badgeClass: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800" },
-  water_leak: { label: "Water Leak", badgeClass: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800" },
-  drain: { label: "Drain", badgeClass: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700" },
+  pothole: {
+    label: "Pothole",
+    badgeClass:
+      "bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800",
+  },
+  streetlight: {
+    label: "Streetlight",
+    badgeClass:
+      "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+  },
+  "water leak": {
+    label: "Water Leak",
+    badgeClass:
+      "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800",
+  },
+  water_leak: {
+    label: "Water Leak",
+    badgeClass:
+      "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800",
+  },
+  drain: {
+    label: "Drain",
+    badgeClass:
+      "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700",
+  },
+  roads: {
+    label: "Roads",
+    badgeClass:
+      "bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border-orange-200 dark:border-orange-800",
+  },
 };
 
-// Status label and color helper (Green for completed, Blue for processing with light bg, Yellow for pending)
+// Status label and color helper
 const STATUS_MAP = {
   pending: {
     label: "Pending",
-    badgeClass: "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950/60 dark:text-yellow-300 dark:border-yellow-800",
+    badgeClass:
+      "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-950/60 dark:text-yellow-300 dark:border-yellow-800",
     dotClass: "bg-yellow-500",
   },
   processing: {
     label: "Processing",
-    badgeClass: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800",
+    badgeClass:
+      "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800",
     dotClass: "bg-blue-500",
   },
   completed: {
     label: "Completed",
-    badgeClass: "bg-green-100 text-green-800 border-green-300 dark:bg-green-950/60 dark:text-green-300 dark:border-green-800",
+    badgeClass:
+      "bg-green-100 text-green-800 border-green-300 dark:bg-green-950/60 dark:text-green-300 dark:border-green-800",
     dotClass: "bg-green-500",
+  },
+  deleted: {
+    label: "Deleted",
+    badgeClass:
+      "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800",
+    dotClass: "bg-rose-500",
   },
 };
 
 export default function AdminGrievanceTable() {
-  const [requests, setRequests] = useState(INITIAL_REQUESTS);
+  const [requests, setRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  // Filters & Sorting state
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("desc"); // 'desc' = newest first, 'asc' = oldest first
 
-  // Edit Modal State
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [meta, setMeta] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    total_pages: 1,
+  });
+
+  // Modals state
+  const [inspectRequest, setInspectRequest] = useState(null);
   const [editingRequest, setEditingRequest] = useState(null);
   const [editStatus, setEditStatus] = useState("pending");
   const [editCategory, setEditCategory] = useState("pothole");
   const [editNotes, setEditNotes] = useState("");
-
-  // Delete Modal State
   const [deletingRequestId, setDeletingRequestId] = useState(null);
 
-  // Filter & Sort Logic
-  const filteredAndSortedRequests = useMemo(() => {
-    return requests
-      .filter((req) => {
-        // Status filter
-        if (statusFilter !== "all" && req.status.toLowerCase() !== statusFilter.toLowerCase()) {
-          return false;
-        }
-        // Category filter (handles 'water leak' and 'water_leak')
-        if (categoryFilter !== "all") {
-          const reqCat = req.category.replace("_", " ").toLowerCase();
-          const filterCat = categoryFilter.replace("_", " ").toLowerCase();
-          if (reqCat !== filterCat) {
-            return false;
-          }
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        const timeA = new Date(a.createdAt).getTime();
-        const timeB = new Date(b.createdAt).getTime();
-        return sortOrder === "desc" ? timeB - timeA : timeA - timeB;
-      });
-  }, [requests, statusFilter, categoryFilter, sortOrder]);
+  // Fetch Complaints from Backend API
+  const fetchComplaints = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
 
-  // Toggle sort order
+    try {
+      const params = {
+        page,
+        limit,
+        sort_by: "created_at",
+        order: sortOrder,
+      };
+
+      if (statusFilter !== "all") {
+        params.status = statusFilter;
+      }
+      if (categoryFilter !== "all") {
+        params.category = categoryFilter;
+      }
+
+      const res = await getComplaintsList(params);
+
+      if (res && res.success && Array.isArray(res.data)) {
+        setRequests(res.data);
+        if (res.meta) {
+          setMeta(res.meta);
+        }
+      } else {
+        setErrorMessage(
+          res?.error || "Failed to load complaints from backend.",
+        );
+      }
+    } catch (err) {
+      console.error("Error fetching complaints list:", err);
+      setErrorMessage(err.message || "Network error loading complaints list.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, limit, sortOrder, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const timer = setTimeout(() => {
+      if (!isCancelled) {
+        fetchComplaints();
+      }
+    }, 0);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [fetchComplaints]);
+
+  // Filter & Sort Change Handlers
+  const handleStatusFilterChange = (e) => {
+    setStatusFilter(e.target.value);
+    setPage(1);
+  };
+
+  const handleCategoryFilterChange = (e) => {
+    setCategoryFilter(e.target.value);
+    setPage(1);
+  };
+
   const handleToggleSort = () => {
     setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+    setPage(1);
+  };
+
+  // Pagination Handlers
+  const handlePrevPage = () => {
+    if (page > 1) setPage((prev) => prev - 1);
+  };
+
+  const handleNextPage = () => {
+    if (page < meta.total_pages) setPage((prev) => prev + 1);
   };
 
   // Open Edit Modal
   const handleOpenEdit = (req) => {
     setEditingRequest(req);
-    setEditStatus(req.status);
-    setEditCategory(req.category);
-    setEditNotes(req.notes || "");
+    setEditStatus(req.status || "pending");
+    setEditCategory(req.category || "pothole");
+    setEditNotes(req.raw_text || req.user_message || req.notes || "");
   };
 
-  // Save Edit
+  // Save Edit (updates locally in current view)
   const handleSaveEdit = (e) => {
     e.preventDefault();
     if (!editingRequest) return;
 
     setRequests((prev) =>
       prev.map((r) =>
-        r.id === editingRequest.id
+        (r.tracking_id || r.id) ===
+        (editingRequest.tracking_id || editingRequest.id)
           ? {
               ...r,
               status: editStatus,
               category: editCategory,
               notes: editNotes,
             }
-          : r
-      )
+          : r,
+      ),
     );
     setEditingRequest(null);
   };
 
-  // Confirm Delete
+  // Confirm Delete (removes locally in current view)
   const handleConfirmDelete = () => {
     if (!deletingRequestId) return;
-    setRequests((prev) => prev.filter((r) => r.id !== deletingRequestId));
+    setRequests((prev) =>
+      prev.filter((r) => (r.tracking_id || r.id) !== deletingRequestId),
+    );
     setDeletingRequestId(null);
   };
 
   // Format date helper
   const formatDate = (isoString) => {
+    if (!isoString) return "—";
     try {
       const d = new Date(isoString);
+      if (isNaN(d.getTime())) return isoString;
       return d.toLocaleDateString("en-US", {
         month: "short",
         day: "2-digit",
@@ -212,25 +256,29 @@ export default function AdminGrievanceTable() {
           <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             Grievance Requests
             <Badge variant="secondary" className="text-xs font-mono">
-              {filteredAndSortedRequests.length} of {requests.length}
+              {requests.length} of {meta.total} reports
             </Badge>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Manage, review, and update citizen infrastructure reports
+            Live infrastructure complaints feed with real-time status and
+            telemetry
           </p>
         </div>
 
-        {/* Filter Controls (Status & Category Dropdowns) */}
+        {/* Filter Controls (Status & Category Dropdowns + Refresh) */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Status Dropdown */}
           <div className="flex items-center gap-1.5">
-            <label htmlFor="statusFilter" className="text-xs font-medium text-slate-500 hidden sm:inline">
+            <label
+              htmlFor="statusFilter"
+              className="text-xs font-medium text-slate-500 hidden sm:inline"
+            >
               Status:
             </label>
             <select
               id="statusFilter"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={handleStatusFilterChange}
               className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">All Statuses</option>
@@ -242,13 +290,16 @@ export default function AdminGrievanceTable() {
 
           {/* Category Dropdown */}
           <div className="flex items-center gap-1.5">
-            <label htmlFor="categoryFilter" className="text-xs font-medium text-slate-500 hidden sm:inline">
+            <label
+              htmlFor="categoryFilter"
+              className="text-xs font-medium text-slate-500 hidden sm:inline"
+            >
               Category:
             </label>
             <select
               id="categoryFilter"
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={handleCategoryFilterChange}
               className="h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">All Categories</option>
@@ -258,17 +309,68 @@ export default function AdminGrievanceTable() {
               <option value="drain">Drain</option>
             </select>
           </div>
+
+          {/* Refresh Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchComplaints}
+            disabled={isLoading}
+            className="h-9 text-xs px-2.5 border-slate-300 dark:border-slate-700"
+            title="Refresh complaints list"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-blue-600" : ""}`}
+            />
+            <span className="hidden sm:inline ml-1.5">Sync</span>
+          </Button>
         </div>
       </div>
 
+      {/* Error Banner */}
+      {errorMessage && (
+        <div className="p-3 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-b border-rose-200 dark:border-rose-900 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            {errorMessage}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={fetchComplaints}
+            className="text-xs h-7 text-rose-700 dark:text-rose-300 hover:bg-rose-100"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Table Content */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-10">
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-4 py-2 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                Loading complaints...
+              </span>
+            </div>
+          </div>
+        )}
+
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 text-slate-500 uppercase tracking-wider font-semibold">
-              <th scope="col" className="py-3 px-4 sm:px-6">ID</th>
-              <th scope="col" className="py-3 px-4 sm:px-6">Category</th>
-              <th scope="col" className="py-3 px-4 sm:px-6">Status</th>
+              <th scope="col" className="py-3 px-4 sm:px-6">
+                ID / Tracking
+              </th>
+
+              <th scope="col" className="py-3 px-4 sm:px-6">
+                Category
+              </th>
+              <th scope="col" className="py-3 px-4 sm:px-6">
+                Status
+              </th>
               <th scope="col" className="py-3 px-4 sm:px-6">
                 <button
                   type="button"
@@ -295,13 +397,19 @@ export default function AdminGrievanceTable() {
                   </span>
                 </button>
               </th>
-              <th scope="col" className="py-3 px-4 sm:px-6 text-right">Action</th>
+              <th scope="col" className="py-3 px-4 sm:px-6 text-right">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-            {filteredAndSortedRequests.length > 0 ? (
-              filteredAndSortedRequests.map((req) => {
-                const cat = CATEGORY_MAP[req.category] || { label: req.category, badgeClass: "" };
+            {requests.length > 0 ? (
+              requests.map((req) => {
+                const reqKey = req.tracking_id || req.id;
+                const cat = CATEGORY_MAP[req.category] || {
+                  label: req.category,
+                  badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
+                };
                 const st = STATUS_MAP[req.status] || {
                   label: req.status,
                   badgeClass: "bg-slate-100 text-slate-700 border-slate-300",
@@ -310,55 +418,94 @@ export default function AdminGrievanceTable() {
 
                 return (
                   <tr
-                    key={req.id}
+                    key={reqKey}
                     className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
                   >
-                    {/* ID */}
-                    <td className="py-3.5 px-4 sm:px-6 font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {req.id}
-                    </td>
-
-                    {/* Category */}
+                    {/* ID & Cluster Indicator */}
                     <td className="py-3.5 px-4 sm:px-6">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${cat.badgeClass}`}>
-                        {cat.label}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
+                          {req.tracking_id || `ID-${req.id}`}
+                        </span>
+                        {req.parent_tracking_id ? (
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">
+                            Merged &rarr; {req.parent_tracking_id}
+                          </span>
+                        ) : req.report_count > 1 ? (
+                          <span className="text-[10px] text-purple-600 dark:text-purple-400 font-mono">
+                            Cluster ({req.report_count} reports)
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
 
-                    {/* Status (Green for completed, Blue for processing with light bg, Yellow for pending) */}
+                    {/* Category & Severity */}
+                    <td className="py-3.5 px-4 sm:px-6">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${cat.badgeClass}`}
+                        >
+                          {cat.label}
+                        </span>
+                        {/* {req.severity && (
+                          <span className="text-[10px] text-slate-400 capitalize">
+                            {req.severity}
+                          </span>
+                        )} */}
+                      </div>
+                    </td>
+
+                    {/* Status */}
                     <td className="py-3.5 px-4 sm:px-6">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${st.badgeClass}`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${st.dotClass}`}></span>
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${st.dotClass}`}
+                        ></span>
                         {st.label}
                       </span>
                     </td>
 
                     {/* Created At */}
                     <td className="py-3.5 px-4 sm:px-6 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                      {formatDate(req.createdAt)}
+                      {formatDate(req.created_at || req.createdAt)}
                     </td>
 
-                    {/* Action (Edit & Delete) */}
+                    {/* Actions (Inspect, Edit, Delete) */}
                     <td className="py-3.5 px-4 sm:px-6 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Inspect Details Button */}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setInspectRequest(req)}
+                          title={`Inspect ${reqKey}`}
+                          className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 dark:hover:text-blue-400"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </Button>
+
+                        {/* Edit Button */}
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
                           onClick={() => handleOpenEdit(req)}
-                          title={`Edit ${req.id}`}
-                          className="h-8 w-8 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 dark:hover:text-blue-400"
+                          title={`Edit ${reqKey}`}
+                          className="h-8 w-8 text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 dark:hover:text-amber-400"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
+
+                        {/* Delete Button */}
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => setDeletingRequestId(req.id)}
-                          title={`Delete ${req.id}`}
+                          onClick={() => setDeletingRequestId(reqKey)}
+                          title={`Delete ${reqKey}`}
                           className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -370,13 +517,17 @@ export default function AdminGrievanceTable() {
               })
             ) : (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-slate-400 space-y-2">
+                <td
+                  colSpan={6}
+                  className="py-12 text-center text-slate-400 space-y-2"
+                >
                   <AlertCircle className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                    No requests match your filter criteria
+                    No complaints match your filter criteria
                   </p>
                   <p className="text-xs text-slate-400">
-                    Try selecting &quot;All Statuses&quot; or &quot;All Categories&quot;.
+                    Try selecting &quot;All Statuses&quot; or &quot;All
+                    Categories&quot;.
                   </p>
                 </td>
               </tr>
@@ -385,6 +536,218 @@ export default function AdminGrievanceTable() {
         </table>
       </div>
 
+      {/* Pagination Footer */}
+      <div className="p-3.5 sm:px-6 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div>
+          Showing page{" "}
+          <span className="font-semibold text-slate-700 dark:text-slate-300">
+            {meta.page || page}
+          </span>{" "}
+          of{" "}
+          <span className="font-semibold text-slate-700 dark:text-slate-300">
+            {meta.total_pages || 1}
+          </span>{" "}
+          ({meta.total} total complaints)
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrevPage}
+            disabled={page <= 1 || isLoading}
+            className="h-8 px-2.5 text-xs border-slate-300 dark:border-slate-700"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 mr-1" />
+            Previous
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleNextPage}
+            disabled={page >= meta.total_pages || isLoading}
+            className="h-8 px-2.5 text-xs border-slate-300 dark:border-slate-700"
+          >
+            Next
+            <ChevronRight className="w-3.5 h-3.5 ml-1" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Inspect / View Complaint Details Modal */}
+      {inspectRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg max-h-[90vh] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
+                  {inspectRequest.tracking_id || `ID-${inspectRequest.id}`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectRequest(null)}
+                className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto text-xs">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 items-center">
+                <Badge
+                  variant="outline"
+                  className={
+                    STATUS_MAP[inspectRequest.status]?.badgeClass ||
+                    "bg-slate-100"
+                  }
+                >
+                  Status: {inspectRequest.status}
+                </Badge>
+                <Badge variant="secondary" className="capitalize">
+                  Category: {inspectRequest.category}
+                </Badge>
+                {inspectRequest.severity && (
+                  <Badge variant="outline" className="capitalize">
+                    Severity: {inspectRequest.severity}
+                  </Badge>
+                )}
+                {inspectRequest.department && (
+                  <Badge variant="outline" className="capitalize">
+                    Dept: {inspectRequest.department}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Summary */}
+              {inspectRequest.summary && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    AI Summary
+                  </span>
+                  <p className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 leading-relaxed">
+                    {inspectRequest.summary}
+                  </p>
+                </div>
+              )}
+
+              {/* Image Preview */}
+              {inspectRequest.image_url && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Incident Image
+                  </span>
+                  <div className="relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100 dark:bg-slate-800 max-h-48 group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={inspectRequest.image_url}
+                      alt="Complaint photo"
+                      className="w-full h-48 object-cover"
+                    />
+                    <a
+                      href={inspectRequest.image_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium gap-1.5"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      View Full Size
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Audio Note Player */}
+              {inspectRequest.audio_url && (
+                <div className="space-y-1.5 text-left">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-blue-500" />
+                    Recorded Audio Note
+                  </span>
+                  <div className="flex flex-col items-start">
+                    <audio
+                      controls
+                      src={inspectRequest.audio_url}
+                      className="h-10 w-full max-w-[320px] rounded-lg"
+                    />
+                    {inspectRequest.transcript && (
+                      <p className="text-[11px] text-slate-500 italic mt-1 text-left">
+                        Transcript: &quot;{inspectRequest.transcript}&quot;
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* User Message (shows raw_text if present) */}
+              {(inspectRequest.raw_text || inspectRequest.user_message) && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    User Message
+                  </span>
+                  <p className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-mono text-[11px]">
+                    {inspectRequest.raw_text || inspectRequest.user_message}
+                  </p>
+                </div>
+              )}
+
+              {/* Coordinates */}
+              {inspectRequest.lat != null && inspectRequest.lng != null && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                    Incident Location
+                  </span>
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <span className="font-mono text-slate-800 dark:text-slate-200">
+                      {inspectRequest.lat}, {inspectRequest.lng}
+                    </span>
+                    <a
+                      href={`https://www.openstreetmap.org/?mlat=${inspectRequest.lat}&mlon=${inspectRequest.lng}#map=17/${inspectRequest.lat}/${inspectRequest.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View Map
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Decision */}
+              {inspectRequest.ai_decision && (
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    AI Decision Analysis
+                  </span>
+                  <p className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-900 leading-relaxed">
+                    {inspectRequest.ai_decision}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInspectRequest(null)}
+                className="text-xs"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Request Modal */}
       {editingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
@@ -392,8 +755,9 @@ export default function AdminGrievanceTable() {
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <Pencil className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Edit Request ({editingRequest.id})
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
+                  Edit Request (
+                  {editingRequest.tracking_id || editingRequest.id})
                 </h3>
               </div>
               <button
@@ -486,7 +850,11 @@ export default function AdminGrievanceTable() {
                   Delete Grievance Request?
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Are you sure you want to remove request <span className="font-mono font-bold text-slate-700 dark:text-slate-300">{deletingRequestId}</span>? This action cannot be undone.
+                  Are you sure you want to remove request{" "}
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                    {deletingRequestId}
+                  </span>
+                  ? This action cannot be undone.
                 </p>
               </div>
             </div>
