@@ -34,9 +34,10 @@ const MOCK_TICKET_DATA = {
       longitude: 72.500038,
       address: "Near S.G. Highway, Ward 12, West Zone",
     },
-    description: "Deep pothole causing traffic slowdown and potential two-wheeler accidents.",
+    description:
+      "Deep pothole causing traffic slowdown and potential two-wheeler accidents.",
     assignedDepartment: "Road Maintenance Division",
-    officerInCharge: "Er. Rajesh Verma (Ward Engineer)",
+    officerInCharge: "Admin Officer: John Doe",
     timeline: [
       {
         title: "Grievance Lodged",
@@ -114,7 +115,8 @@ export default function TrackRequestModal({
             longitude: 72.500038,
             address: "Municipal Corporation Jurisdiction",
           },
-          description: "Grievance received and queued for technical inspection.",
+          description:
+            "Grievance received and queued for technical inspection.",
           assignedDepartment: "Public Works Department",
           officerInCharge: "Supervising Officer (Assigned on review)",
           timeline: [
@@ -171,7 +173,8 @@ export default function TrackRequestModal({
               Track Grievance Status
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Enter your ticket reference ID to see live inspection and resolution progress
+              Enter your ticket reference ID to see live inspection and
+              resolution progress
             </p>
           </div>
           <button
@@ -219,7 +222,9 @@ export default function TrackRequestModal({
             </div>
 
             <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-              <span>Tracking IDs are issued immediately upon report submission.</span>
+              <span>
+                Tracking IDs are issued immediately upon report submission.
+              </span>
               <button
                 type="button"
                 onClick={handleLoadSample}
@@ -255,8 +260,18 @@ export default function TrackRequestModal({
                     </div>
 
                     <div className="text-left sm:text-right text-xs text-slate-500">
-                      <div>Logged: <span className="text-slate-700 dark:text-slate-300 font-medium">{searchResult.submittedAt}</span></div>
-                      <div>Target: <span className="text-slate-700 dark:text-slate-300 font-medium">{searchResult.expectedResolution}</span></div>
+                      <div>
+                        Logged:{" "}
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">
+                          {searchResult.submittedAt}
+                        </span>
+                      </div>
+                      <div>
+                        Target:{" "}
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">
+                          {searchResult.expectedResolution}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -268,7 +283,8 @@ export default function TrackRequestModal({
                         Incident Coordinates
                       </div>
                       <div className="font-mono text-slate-800 dark:text-slate-200 font-medium">
-                        {searchResult.location.latitude}, {searchResult.location.longitude}
+                        {searchResult.location.latitude},{" "}
+                        {searchResult.location.longitude}
                       </div>
                       <a
                         href={`https://www.openstreetmap.org/?mlat=${searchResult.location.latitude}&mlon=${searchResult.location.longitude}#map=17/${searchResult.location.latitude}/${searchResult.location.longitude}`}
@@ -375,7 +391,8 @@ export default function TrackRequestModal({
                   <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono">
                     CIGA-XXXXXX-XXX
                   </code>
-                  . Enter it above to check the engineering team&apos;s repair status.
+                  . Enter it above to check the engineering team&apos;s repair
+                  status.
                 </p>
               </div>
             </div>

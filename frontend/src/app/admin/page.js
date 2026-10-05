@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import AdminGrievanceTable from "@/components/AdminGrievanceTable";
+import AdminHotspotMap from "@/components/AdminHotspotMap";
+import Link from "next/link";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -29,8 +31,8 @@ export default function AdminPage() {
             setUser(JSON.parse(stored));
           } catch {
             setUser({
-              name: "Officer Rajesh Verma",
-              role: "Ward Superintending Engineer",
+              name: "Admin User",
+              role: "Administrator",
             });
           }
           setIsCheckingAuth(false);
@@ -61,7 +63,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       {/* Admin Navbar */}
-      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
+      <header className="w-full border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm">
@@ -69,9 +71,12 @@ export default function AdminPage() {
             </div> */}
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-slate-100">
+                <Link
+                  href="/"
+                  className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-slate-100"
+                >
                   Citizen Infra
-                </span>
+                </Link>
                 <Badge
                   variant="secondary"
                   className="text-[10px] font-semibold uppercase tracking-wider bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-900"
@@ -201,15 +206,10 @@ export default function AdminPage() {
 
         {/* Grievance Requests Management Table */}
         <AdminGrievanceTable />
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400 mt-auto bg-white/50 dark:bg-slate-900/50">
-        <p>
-          Citizen Infrastructure Grievance Assistance &bull; Internal
-          Administration Console
-        </p>
-      </footer>
+        {/* Live Infrastructure Map & Hotspot Analysis */}
+        <AdminHotspotMap />
+      </main>
     </div>
   );
 }

@@ -14,7 +14,14 @@ import {
   EyeOff,
   ShieldCheck,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +30,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   // Prefilled static login credentials
-  const [email, setEmail] = useState("officer.verma@infra.gov.in");
+  const [email, setEmail] = useState("admin@gmail.com");
   const [password, setPassword] = useState("CivicAdmin@2026");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,11 +50,11 @@ export default function LoginPage() {
         localStorage.setItem(
           "ciga_user",
           JSON.stringify({
-            name: "Officer Rajesh Verma",
-            role: "Ward Superintending Engineer",
+            name: "Admin User ",
+            role: "Administrator",
             email: email,
             loginTime: new Date().toISOString(),
-          })
+          }),
         );
       }
 
@@ -81,9 +88,6 @@ export default function LoginPage() {
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
             Citizen Infra
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Administrative & Municipal Grievance Management
-          </p>
         </div>
 
         {/* Login Card */}
@@ -101,7 +105,10 @@ export default function LoginPage() {
             <CardContent className="space-y-4">
               {/* Email / Username field */}
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <Label
+                  htmlFor="email"
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                >
                   Email / Employee ID
                 </Label>
                 <div className="relative">
@@ -113,14 +120,17 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-9 h-10 text-sm font-mono text-slate-800 dark:text-slate-200"
-                    placeholder="officer@infra.gov.in"
+                    placeholder="admin@gmail.com"
                   />
                 </div>
               </div>
 
               {/* Password field */}
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <Label
+                  htmlFor="password"
+                  className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                >
                   Password
                 </Label>
                 <div className="relative">
