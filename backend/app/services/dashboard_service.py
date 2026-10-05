@@ -16,15 +16,6 @@ from complaints
 where deleted_at is null
 """
 
-_HOTSPOTS = """
-select tracking_id, category, lat, lng, report_count, is_urgent, status, image_url, audio_url,
-       user_message, ai_decision
-from complaints
-where deleted_at is null and parent_id is null and status <> 'completed' and report_count >= 2
-order by report_count desc, id
-limit 5
-"""
-
 _BY_CATEGORY = """
 select category, count(*) as count
 from complaints
@@ -37,7 +28,6 @@ order by count desc
 def get_stats():
     with ext.db_pool.connection() as conn:
         s = conn.execute(_STATS, {"days": Config.OVERDUE_DAYS}).fetchone()
-        hotspots = conn.execute(_HOTSPOTS).fetchall()
         by_category = conn.execute(_BY_CATEGORY).fetchall()
 
     avg_seconds = float(s["avg_ack_seconds"]) if s["avg_ack_seconds"] is not None else None
@@ -50,7 +40,6 @@ def get_stats():
         "avg_time_to_acknowledge": _format_duration(avg_seconds),
         "unique_issues": s["unique_issues"],
         "urgent_open": s["urgent_open"],
-        "top_hotspots": hotspots,
         "by_category": by_category,
     }
 
