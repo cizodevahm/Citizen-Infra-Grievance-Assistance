@@ -21,6 +21,9 @@ export const API_KEYS = {
   COMPLAINTS_LIST:
     process.env.NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY ||
     "l5VlqCYhtC9OCLT-3ifm0yJzciW-Yd6NV7mQ-48t2zk",
+  UPDATE_STATUS:
+    process.env.NEXT_PUBLIC_UPDATE_STATUS_API_KEY ||
+    "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
 };
 
 // All API Endpoints defined in one common dictionary
@@ -42,6 +45,8 @@ export const API_ENDPOINTS = {
     const qs = searchParams.toString();
     return `${API_BASE_URL}/api/complaints${qs ? `?${qs}` : ""}`;
   },
+  UPDATE_COMPLAINT_STATUS: (trackingId) =>
+    `${API_BASE_URL}/api/complaints/${encodeURIComponent(trackingId)}/status`,
 };
 
 /**
@@ -206,6 +211,55 @@ export async function getComplaintsList(params = {}) {
       ...item,
       user_message: item.raw_text || item.user_message,
     }));
+  }
+
+  return result;
+}
+
+/**
+ * Update the status of an existing complaint by tracking ID.
+ *
+ * Supported status values: "pending", "processing", "completed"
+ *
+ * @param {string} trackingId e.g. "RIF-6DMEXS"
+ * @param {string} status e.g. "completed"
+ * @param {string} [changedBy="admin"]
+ * @returns {Promise<Object>} API response object { success: true, data: { ... } }
+ */
+export async function updateComplaintStatus(
+  trackingId,
+  status,
+  changedBy = "admin",
+) {
+  if (!trackingId || !trackingId.trim()) {
+    throw new Error("A tracking ID is required to update status.");
+  }
+  if (!status || !status.trim()) {
+    throw new Error("A status value is required.");
+  }
+
+  const cleanId = trackingId.trim();
+  const response = await fetch(API_ENDPOINTS.UPDATE_COMPLAINT_STATUS(cleanId), {
+    method: "PATCH",
+    headers: {
+      "X-API-Key": API_KEYS.UPDATE_STATUS,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      status: status.trim().toLowerCase(),
+      changed_by: changedBy || "admin",
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Failed to update complaint status (${response.status})`;
+    throw new Error(errorMsg);
   }
 
   return result;

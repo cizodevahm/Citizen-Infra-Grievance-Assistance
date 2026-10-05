@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getComplaintsList } from "@/lib/api";
+import { getComplaintsList, updateComplaintStatus } from "@/lib/api";
 
 // Category label helper
 const CATEGORY_MAP = {
@@ -108,8 +108,8 @@ export default function AdminGrievanceTable() {
   const [inspectRequest, setInspectRequest] = useState(null);
   const [editingRequest, setEditingRequest] = useState(null);
   const [editStatus, setEditStatus] = useState("pending");
-  const [editCategory, setEditCategory] = useState("pothole");
-  const [editNotes, setEditNotes] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState(null);
   const [deletingRequestId, setDeletingRequestId] = useState(null);
 
   // Fetch Complaints from Backend API
@@ -192,33 +192,67 @@ export default function AdminGrievanceTable() {
     if (page < meta.total_pages) setPage((prev) => prev + 1);
   };
 
-  // Open Edit Modal
+  // Open Edit Modal (only status can be edited)
   const handleOpenEdit = (req) => {
     setEditingRequest(req);
     setEditStatus(req.status || "pending");
-    setEditCategory(req.category || "pothole");
-    setEditNotes(req.raw_text || req.user_message || req.notes || "");
+    setEditError(null);
   };
 
-  // Save Edit (updates locally in current view)
-  const handleSaveEdit = (e) => {
+  // Save Edit (calls PATCH API to update status)
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingRequest) return;
 
-    setRequests((prev) =>
-      prev.map((r) =>
-        (r.tracking_id || r.id) ===
-        (editingRequest.tracking_id || editingRequest.id)
-          ? {
-              ...r,
-              status: editStatus,
-              category: editCategory,
-              notes: editNotes,
-            }
-          : r,
-      ),
-    );
-    setEditingRequest(null);
+    const trackingId = editingRequest.tracking_id || editingRequest.id;
+    if (!trackingId) return;
+
+    setIsSavingEdit(true);
+    setEditError(null);
+
+    // Retrieve logged-in admin user's name if available
+    let changedBy = "admin";
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("ciga_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.name) {
+            changedBy = parsed.name.trim();
+          }
+        }
+      }
+    } catch {
+      // fallback to admin
+    }
+
+    try {
+      const response = await updateComplaintStatus(
+        trackingId,
+        editStatus,
+        changedBy,
+      );
+
+      // Update state locally with new status and updated timestamps
+      setRequests((prev) =>
+        prev.map((r) =>
+          (r.tracking_id || r.id) === trackingId
+            ? {
+                ...r,
+                ...(response.data || {}),
+                status: editStatus,
+              }
+            : r,
+        ),
+      );
+
+      // Close modal
+      setEditingRequest(null);
+    } catch (err) {
+      setEditError(err.message || "Failed to update status. Please try again.");
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   // Confirm Delete (removes locally in current view)
@@ -748,78 +782,109 @@ export default function AdminGrievanceTable() {
         </div>
       )}
 
-      {/* Edit Request Modal */}
+      {/* Edit Request Modal (Status Only) */}
       {editingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Pencil className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
-                  Edit Request (
-                  {editingRequest.tracking_id || editingRequest.id})
-                </h3>
+                <div className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Update Complaint Status
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-500">
+                    {editingRequest.tracking_id || editingRequest.id}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setEditingRequest(null)}
-                className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                onClick={() => !isSavingEdit && setEditingRequest(null)}
+                disabled={isSavingEdit}
+                className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="p-5 space-y-4 text-xs">
+              {/* Complaint Overview Card */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Category:</span>
+                  <Badge
+                    variant="outline"
+                    className={`capitalize text-[11px] font-semibold ${CATEGORY_MAP[editingRequest.category]?.badgeClass || "bg-slate-100 text-slate-700"}`}
+                  >
+                    {CATEGORY_MAP[editingRequest.category]?.label || editingRequest.category || "—"}
+                  </Badge>
+                </div>
+                {editingRequest.department && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Department:</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300 capitalize">
+                      {editingRequest.department}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Current Status:</span>
+                  <Badge
+                    variant="outline"
+                    className={`capitalize text-[11px] font-semibold ${STATUS_MAP[editingRequest.status]?.badgeClass || "bg-slate-100 text-slate-700"}`}
+                  >
+                    {STATUS_MAP[editingRequest.status]?.label || editingRequest.status || "—"}
+                  </Badge>
+                </div>
+                {(editingRequest.summary || editingRequest.user_message || editingRequest.raw_text) && (
+                  <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500 block mb-0.5">Description:</span>
+                    <p className="text-slate-700 dark:text-slate-300 line-clamp-2 italic">
+                      &quot;{editingRequest.summary || editingRequest.user_message || editingRequest.raw_text}&quot;
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Status Select Field */}
               <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                  Status
+                <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1.5 block">
+                  Select New Status <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
+                  disabled={isSavingEdit}
+                  className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                 >
                   <option value="pending">Pending</option>
                   <option value="processing">Processing</option>
                   <option value="completed">Completed</option>
                 </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Changing the status will update backend records and log this action in tracking history.
+                </p>
               </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                  Category
-                </label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium"
-                >
-                  <option value="pothole">Pothole</option>
-                  <option value="streetlight">Streetlight</option>
-                  <option value="water leak">Water Leak</option>
-                  <option value="drain">Drain</option>
-                </select>
-              </div>
+              {/* Error Message */}
+              {editError && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 flex items-start gap-2 text-red-700 dark:text-red-300 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                  <span>{editError}</span>
+                </div>
+              )}
 
-              <div>
-                <label className="font-semibold text-slate-700 dark:text-slate-300 mb-1 block">
-                  Internal Remarks / Notes
-                </label>
-                <textarea
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
-                  rows={3}
-                  className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs resize-none"
-                  placeholder="Add notes for field engineers..."
-                />
-              </div>
-
+              {/* Actions */}
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setEditingRequest(null)}
+                  disabled={isSavingEdit}
                   className="text-xs"
                 >
                   Cancel
@@ -827,9 +892,17 @@ export default function AdminGrievanceTable() {
                 <Button
                   type="submit"
                   size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                  disabled={isSavingEdit}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4"
                 >
-                  Save Changes
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
                 </Button>
               </div>
             </form>
