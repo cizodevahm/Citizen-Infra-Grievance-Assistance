@@ -24,6 +24,9 @@ export const API_KEYS = {
   UPDATE_STATUS:
     process.env.NEXT_PUBLIC_UPDATE_STATUS_API_KEY ||
     "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
+  DELETE_COMPLAINT:
+    process.env.NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY ||
+    "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
 };
 
 // All API Endpoints defined in one common dictionary
@@ -47,6 +50,8 @@ export const API_ENDPOINTS = {
   },
   UPDATE_COMPLAINT_STATUS: (trackingId) =>
     `${API_BASE_URL}/api/complaints/${encodeURIComponent(trackingId)}/status`,
+  DELETE_COMPLAINT: (trackingId) =>
+    `${API_BASE_URL}/api/complaints/${encodeURIComponent(trackingId)}`,
 };
 
 /**
@@ -259,6 +264,49 @@ export async function updateComplaintStatus(
       result?.error ||
       result?.message ||
       `Failed to update complaint status (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return result;
+}
+
+/**
+ * Delete a complaint by tracking ID with reason and attribution.
+ *
+ * @param {string} trackingId e.g. "RIF-U7MPBU"
+ * @param {string} reason Reason for deletion, e.g. "duplicate report"
+ * @param {string} [deletedBy="admin"] Name or identifier of the user deleting
+ * @returns {Promise<Object>} API response object { success: true, data: { ... } }
+ */
+export async function deleteComplaint(trackingId, reason, deletedBy = "admin") {
+  if (!trackingId || !trackingId.trim()) {
+    throw new Error("A tracking ID is required to delete a complaint.");
+  }
+  if (!reason || !reason.trim()) {
+    throw new Error("Please provide a reason for deleting this complaint.");
+  }
+
+  const cleanId = trackingId.trim();
+  const response = await fetch(API_ENDPOINTS.DELETE_COMPLAINT(cleanId), {
+    method: "DELETE",
+    headers: {
+      "X-API-Key": API_KEYS.DELETE_COMPLAINT,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      deleted_by: deletedBy || "admin",
+      reason: reason.trim(),
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Failed to delete complaint (${response.status})`;
     throw new Error(errorMsg);
   }
 

@@ -20,7 +20,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getComplaintsList, updateComplaintStatus } from "@/lib/api";
+import {
+  getComplaintsList,
+  updateComplaintStatus,
+  deleteComplaint,
+} from "@/lib/api";
 
 // Category label helper
 const CATEGORY_MAP = {
@@ -110,7 +114,10 @@ export default function AdminGrievanceTable() {
   const [editStatus, setEditStatus] = useState("pending");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState(null);
-  const [deletingRequestId, setDeletingRequestId] = useState(null);
+  const [deletingRequest, setDeletingRequest] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   // Fetch Complaints from Backend API
   const fetchComplaints = useCallback(async () => {
@@ -255,13 +262,69 @@ export default function AdminGrievanceTable() {
     }
   };
 
-  // Confirm Delete (removes locally in current view)
-  const handleConfirmDelete = () => {
-    if (!deletingRequestId) return;
-    setRequests((prev) =>
-      prev.filter((r) => (r.tracking_id || r.id) !== deletingRequestId),
-    );
-    setDeletingRequestId(null);
+  // Open Delete Modal
+  const handleOpenDelete = (req) => {
+    setDeletingRequest(req);
+    setDeleteReason("");
+    setDeleteError(null);
+  };
+
+  // Confirm Delete (calls DELETE API with mandatory reason)
+  const handleConfirmDelete = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!deletingRequest) return;
+
+    const trackingId = deletingRequest.tracking_id || deletingRequest.id;
+    if (!trackingId) return;
+
+    if (!deleteReason.trim()) {
+      setDeleteError("Please specify a reason before deleting this complaint.");
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    // Retrieve logged-in admin user's name if available
+    let deletedBy = "admin";
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("ciga_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.name) {
+            deletedBy = parsed.name.trim();
+          }
+        }
+      }
+    } catch {
+      // fallback to admin
+    }
+
+    try {
+      await deleteComplaint(trackingId, deleteReason.trim(), deletedBy);
+
+      // Remove deleted complaint from the active table list
+      setRequests((prev) =>
+        prev.filter((r) => (r.tracking_id || r.id) !== trackingId),
+      );
+
+      // Update total count in meta if present
+      setMeta((prev) => ({
+        ...prev,
+        total: Math.max(0, (prev.total || 1) - 1),
+      }));
+
+      // Close modal and reset state
+      setDeletingRequest(null);
+      setDeleteReason("");
+    } catch (err) {
+      setDeleteError(
+        err.message || "Failed to delete complaint. Please try again.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Format date helper
@@ -538,7 +601,7 @@ export default function AdminGrievanceTable() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => setDeletingRequestId(reqKey)}
+                          onClick={() => handleOpenDelete(req)}
                           title={`Delete ${reqKey}`}
                           className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
                         >
@@ -910,48 +973,159 @@ export default function AdminGrievanceTable() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deletingRequestId && (
+      {/* Delete Confirmation Modal (Requires Reason) */}
+      {deletingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="relative w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-600 shrink-0">
-                <Trash2 className="w-5 h-5" />
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Delete Grievance Request
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-500">
+                    {deletingRequest.tracking_id || deletingRequest.id}
+                  </p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Delete Grievance Request?
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Are you sure you want to remove request{" "}
-                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
-                    {deletingRequestId}
-                  </span>
-                  ? This action cannot be undone.
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => !isDeleting && setDeletingRequest(null)}
+                disabled={isDeleting}
+                className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setDeletingRequestId(null)}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={handleConfirmDelete}
-                className="text-xs"
-              >
-                Delete Request
-              </Button>
-            </div>
+            <form onSubmit={handleConfirmDelete} className="p-5 space-y-4 text-xs">
+              {/* Caution Warning */}
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 space-y-1">
+                <p className="font-semibold text-xs flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  Permanent Deletion Warning
+                </p>
+                <p className="text-[11px] leading-relaxed opacity-90 pl-5">
+                  Are you sure you want to delete complaint{" "}
+                  <span className="font-mono font-bold">
+                    {deletingRequest.tracking_id || deletingRequest.id}
+                  </span>
+                  ? This action will mark this complaint as deleted and cannot be undone.
+                </p>
+              </div>
+
+              {/* Complaint Overview Card */}
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Category:</span>
+                  <Badge
+                    variant="outline"
+                    className={`capitalize text-[11px] font-semibold ${CATEGORY_MAP[deletingRequest.category]?.badgeClass || "bg-slate-100 text-slate-700"}`}
+                  >
+                    {CATEGORY_MAP[deletingRequest.category]?.label || deletingRequest.category || "—"}
+                  </Badge>
+                </div>
+                {(deletingRequest.summary || deletingRequest.user_message || deletingRequest.raw_text) && (
+                  <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500 block mb-0.5">Description:</span>
+                    <p className="text-slate-700 dark:text-slate-300 line-clamp-2 italic">
+                      &quot;{deletingRequest.summary || deletingRequest.user_message || deletingRequest.raw_text}&quot;
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Reason for Deletion */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">
+                    Reason for Deletion <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">Required</span>
+                </div>
+
+                {/* Quick Selection Presets */}
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {[
+                    "duplicate report",
+                    "invalid / spam report",
+                    "resolved offline",
+                    "wrong department",
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => {
+                        setDeleteReason(preset);
+                        if (deleteError) setDeleteError(null);
+                      }}
+                      className={`px-2 py-0.5 rounded-full border text-[11px] transition-colors ${
+                        deleteReason === preset
+                          ? "bg-red-50 text-red-700 border-red-300 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800 font-medium"
+                          : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  rows={2}
+                  value={deleteReason}
+                  onChange={(e) => {
+                    setDeleteReason(e.target.value);
+                    if (deleteError) setDeleteError(null);
+                  }}
+                  disabled={isDeleting}
+                  placeholder="Enter specific reason (e.g. duplicate report, spam, testing)..."
+                  className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
+                />
+              </div>
+
+              {/* Error Message */}
+              {deleteError && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 flex items-start gap-2 text-red-700 dark:text-red-300 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDeletingRequest(null)}
+                  disabled={isDeleting}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  size="sm"
+                  disabled={isDeleting || !deleteReason.trim()}
+                  className="text-xs font-semibold px-4"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Request"
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
