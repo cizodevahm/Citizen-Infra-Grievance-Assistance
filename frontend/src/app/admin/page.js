@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
@@ -9,6 +9,8 @@ import {
   Inbox,
   FolderOpen,
   Timer,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,11 +18,43 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import AdminGrievanceTable from "@/components/AdminGrievanceTable";
 import AdminHotspotMap from "@/components/AdminHotspotMap";
 import Link from "next/link";
+import { getAdminDashboardStats } from "@/lib/api";
 
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Live Admin Dashboard Statistics State
+  const [stats, setStats] = useState(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+
+  const loadDashboardStats = useCallback(async () => {
+    setIsLoadingStats(true);
+    setStatsError(null);
+    try {
+      const response = await getAdminDashboardStats();
+      if (response && response.success && response.data) {
+        setStats(response.data);
+        setLastRefreshedAt(
+          new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        );
+      } else {
+        setStatsError(response?.error || "Failed to load dashboard metrics");
+      }
+    } catch (err) {
+      console.error("Dashboard stats error:", err);
+      setStatsError(err.message || "Failed to load live statistics");
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,6 +70,7 @@ export default function AdminPage() {
             });
           }
           setIsCheckingAuth(false);
+          loadDashboardStats();
         } else {
           router.push("/login");
         }
@@ -43,7 +78,7 @@ export default function AdminPage() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [router]);
+  }, [router, loadDashboardStats]);
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -108,6 +143,62 @@ export default function AdminPage() {
 
       {/* Main Admin Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Dashboard Metrics Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              System Overview & Metrics
+              <Badge
+                variant="outline"
+                className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40"
+              >
+                Live Sync
+              </Badge>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Aggregated grievance lifecycle metrics and resolution telemetry
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {lastRefreshedAt && (
+              <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                Synced at {lastRefreshedAt}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadDashboardStats}
+              disabled={isLoadingStats}
+              className="text-xs h-8 px-2.5 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 mr-1.5 ${isLoadingStats ? "animate-spin text-blue-600" : ""}`}
+              />
+              {isLoadingStats ? "Syncing..." : "Refresh"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Stats Error Alert if any */}
+        {statsError && (
+          <div className="p-3 text-xs bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded-lg flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-rose-500" />
+              {statsError}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadDashboardStats}
+              className="text-xs h-7 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40"
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
         {/* 5 Stats Cards: Received, Open, Resolved, Overdue, Average Time to Acknowledge */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* 1. Received */}
@@ -119,12 +210,15 @@ export default function AdminPage() {
               <Inbox className="w-4 h-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
-                248
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                +14 reported today
-              </p>
+              {isLoadingStats ? (
+                <div className="h-8 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
+                  {stats?.received ?? 0}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -137,12 +231,15 @@ export default function AdminPage() {
               <FolderOpen className="w-4 h-4 text-amber-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">
-                42
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Active in pipeline
-              </p>
+              {isLoadingStats ? (
+                <div className="h-8 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">
+                  {stats?.open ?? 0}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -155,12 +252,15 @@ export default function AdminPage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                198
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                92% resolution rate
-              </p>
+              {isLoadingStats ? (
+                <div className="h-8 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {stats?.resolved ?? 0}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -173,12 +273,15 @@ export default function AdminPage() {
               <AlertCircle className="w-4 h-4 text-rose-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
-                8
-              </div>
-              <p className="text-[11px] text-rose-500/80 mt-1">
-                Exceeded SLA limit
-              </p>
+              {isLoadingStats ? (
+                <div className="h-8 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-rose-400" />
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-rose-600 dark:text-rose-400">
+                  {stats?.overdue ?? 0}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -194,21 +297,26 @@ export default function AdminPage() {
               <Timer className="w-4 h-4 text-indigo-500 shrink-0 ml-1" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
-                2.4 hrs
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Median response time
-              </p>
+              {isLoadingStats ? (
+                <div className="h-8 flex items-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                </div>
+              ) : (
+                <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
+                  {stats?.avg_time_to_acknowledge != null
+                    ? `${stats.avg_time_to_acknowledge} hrs`
+                    : "N/A"}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Grievance Requests Management Table */}
-        <AdminGrievanceTable />
-
         {/* Live Infrastructure Map & Hotspot Analysis */}
         <AdminHotspotMap />
+
+        {/* Grievance Requests Management Table */}
+        <AdminGrievanceTable />
       </main>
     </div>
   );

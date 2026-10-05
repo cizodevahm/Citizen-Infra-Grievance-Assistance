@@ -15,6 +15,9 @@ export const API_KEYS = {
   TRACKING:
     process.env.NEXT_PUBLIC_TRACKING_API_KEY ||
     "AwH0IukvjtwAc9lqpJ8MWrj2QZkIQ6MLKsww0Qoqs5g",
+  ADMIN:
+    process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
+    "h7Dn_V0HqYBAKbdaACWVET3DAmVsbsuxoNKiOKjtx3s",
 };
 
 // All API Endpoints defined in one common dictionary
@@ -22,6 +25,7 @@ export const API_ENDPOINTS = {
   COMPLAINTS: `${API_BASE_URL}/api/complaints`,
   TRACK_COMPLAINT: (trackingId) =>
     `${API_BASE_URL}/api/complaints/track/${encodeURIComponent(trackingId)}`,
+  ADMIN_STATS: `${API_BASE_URL}/api/admin/dashboard/stats`,
 };
 
 /**
@@ -115,6 +119,33 @@ export async function trackComplaint(trackingId) {
       result?.error ||
       result?.message ||
       `Tracking request failed (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return result;
+}
+
+/**
+ * Fetch aggregated admin dashboard statistics and metrics.
+ *
+ * @returns {Promise<Object>} API response object { success: true, data: { ... } }
+ */
+export async function getAdminDashboardStats() {
+  const response = await fetch(API_ENDPOINTS.ADMIN_STATS, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEYS.ADMIN,
+    },
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Failed to fetch dashboard stats (${response.status})`;
     throw new Error(errorMsg);
   }
 
