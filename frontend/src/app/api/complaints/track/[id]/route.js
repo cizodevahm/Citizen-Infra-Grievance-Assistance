@@ -67,10 +67,8 @@ export async function GET(request, { params }) {
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:5001";
-    const apiKey =
-      process.env.BACKEND_API_KEY ||
-      "AwH0IukvjtwAc9lqpJ8MWrj2QZkIQ6MLKsww0Qoqs5g";
+    const backendUrl = process.env.BACKEND_URL;
+    const apiKey = process.env.BACKEND_API_KEY;
 
     try {
       const response = await fetch(

@@ -5,8 +5,7 @@ export async function POST(request) {
     const incomingFormData = await request.formData();
 
     const image = incomingFormData.get("image");
-    const lat =
-      incomingFormData.get("lat") || incomingFormData.get("latitude");
+    const lat = incomingFormData.get("lat") || incomingFormData.get("latitude");
     const lng =
       incomingFormData.get("lng") || incomingFormData.get("longitude");
     const text =
@@ -18,7 +17,7 @@ export async function POST(request) {
     if (!image || typeof image === "string") {
       return NextResponse.json(
         { success: false, error: "Infrastructure issue image is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -28,16 +27,12 @@ export async function POST(request) {
           success: false,
           error: "Location coordinates (latitude and longitude) are required.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const apiUrl =
-      process.env.COMPLAINTS_API_URL ||
-      "https://test-ciga-ai.onrender.com/api/complaints";
-    const apiKey =
-      process.env.COMPLAINTS_API_KEY ||
-      "e5q2V2sJkkdEQUXe_-ETzy3UjrQreotz8QrT5gcHqKU";
+    const apiUrl = process.env.COMPLAINTS_API_URL;
+    const apiKey = process.env.COMPLAINTS_API_KEY;
 
     // Prepare outbound FormData
     const outboundFormData = new FormData();
@@ -79,16 +74,17 @@ export async function POST(request) {
         error: errorMessage,
         details: responseData,
       },
-      { status: backendResponse.status || 400 }
+      { status: backendResponse.status || 400 },
     );
   } catch (error) {
     console.error("Grievance submission API error:", error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Internal server error processing grievance report.",
+        error:
+          error.message || "Internal server error processing grievance report.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

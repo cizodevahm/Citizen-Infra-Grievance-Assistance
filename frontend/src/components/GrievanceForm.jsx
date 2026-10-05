@@ -34,6 +34,7 @@ import CameraModal from "./CameraModal";
 import AudioRecorder from "./AudioRecorder";
 import LocationPicker from "./LocationPicker";
 import TrackRequestModal from "./TrackRequestModal";
+import { submitComplaint } from "@/lib/api";
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB limit
 
@@ -134,46 +135,27 @@ export default function GrievanceForm() {
     setIsSubmitting(true);
 
     try {
-      // Build FormData with exact API fields: image, lat, lng, text (optional), audio (optional)
-      const formData = new FormData();
-      formData.append("image", imageFile);
-      formData.append("lat", location.latitude.toString());
-      formData.append("lng", location.longitude.toString());
-
-      if (textNote.trim()) {
-        formData.append("text", textNote.trim());
-      }
-
-      if (voiceNoteFile) {
-        formData.append("audio", voiceNoteFile);
-      }
-
-      const response = await fetch("/api/complaints", {
-        method: "POST",
-        body: formData,
+      const result = await submitComplaint({
+        image: imageFile,
+        lat: location.latitude,
+        lng: location.longitude,
+        text: textNote,
+        audio: voiceNoteFile,
       });
 
-      const result = await response.json().catch(() => ({}));
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error || "Failed to submit grievance. Please try again.",
-        );
-      }
-
       const complaintData = result.data || {};
-      const trackingId =
-        complaintData.tracking_id ||
-        result.ticketId ||
-        `RIF-${Math.floor(100000 + Math.random() * 900000)}`;
 
       setSuccessData({
-        ticketId: trackingId,
-        category: complaintData.category || "General",
-        status: complaintData.status || "pending",
+        ticketId: complaintData.tracking_id,
+        category: complaintData.category,
+        status: complaintData.status,
         severity: complaintData.severity,
+        isUrgent: complaintData.is_urgent,
         department: complaintData.department,
         summary: complaintData.summary,
+        isMerged: Boolean(complaintData.is_merged),
+        parentTrackingId: complaintData.parent_tracking_id,
+        reportCount: complaintData.report_count,
         imageName: imageFile.name,
         imageSize: (imageFile.size / (1024 * 1024)).toFixed(2) + " MB",
         hasVoiceNote: Boolean(voiceNoteFile),
@@ -232,7 +214,10 @@ export default function GrievanceForm() {
               {successData.category && (
                 <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
                   <span className="text-slate-500">Category:</span>
-                  <Badge variant="outline" className="capitalize text-xs font-semibold">
+                  <Badge
+                    variant="outline"
+                    className="capitalize text-xs font-semibold"
+                  >
                     {successData.category}
                   </Badge>
                 </div>
@@ -247,9 +232,46 @@ export default function GrievanceForm() {
                 </div>
               )}
 
+              {successData.severity && (
+                <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-500">Severity:</span>
+                  <Badge
+                    variant="outline"
+                    className="capitalize text-xs font-semibold"
+                  >
+                    {successData.severity}
+                  </Badge>
+                </div>
+              )}
+
+              {successData.department && (
+                <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-500">Department:</span>
+                  <span className="text-xs font-medium capitalize text-slate-800 dark:text-slate-200">
+                    {successData.department}
+                  </span>
+                </div>
+              )}
+
+              {successData.isMerged && (
+                <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
+                  <span className="text-slate-500">Duplicate Clustering:</span>
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-mono bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200"
+                  >
+                    Merged into{" "}
+                    {successData.parentTrackingId || successData.ticketId} (
+                    {successData.reportCount || 1} reports)
+                  </Badge>
+                </div>
+              )}
+
               {successData.summary && (
                 <div className="pt-1 pb-1">
-                  <span className="text-xs text-slate-500 block mb-1">AI Summary:</span>
+                  <span className="text-xs text-slate-500 block mb-1">
+                    AI Summary:
+                  </span>
                   <p className="text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
                     {successData.summary}
                   </p>
@@ -296,14 +318,15 @@ export default function GrievanceForm() {
                 </div>
               )}
 
-              {successData.textNote && successData.textNote !== "No text description provided" && (
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                  <span className="text-xs text-slate-500">Description:</span>
-                  <p className="text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
-                    {successData.textNote}
-                  </p>
-                </div>
-              )}
+              {successData.textNote &&
+                successData.textNote !== "No text description provided" && (
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                    <span className="text-xs text-slate-500">Description:</span>
+                    <p className="text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                      {successData.textNote}
+                    </p>
+                  </div>
+                )}
             </div>
           </CardContent>
 

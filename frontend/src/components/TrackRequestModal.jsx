@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { trackComplaint } from "@/lib/api";
 
 const STATUS_STYLES = {
   completed: {
@@ -87,22 +88,19 @@ export default function TrackRequestModal({
     setSearchResult(null);
 
     try {
-      const res = await fetch(
-        `/api/complaints/track/${encodeURIComponent(query)}`,
-      );
-      const json = await res.json();
+      const json = await trackComplaint(query);
 
-      if (res.ok && json.success && json.data) {
+      if (json && json.success && json.data) {
         setSearchResult(json.data);
       } else {
         setErrorMessage(
-          json.error || `No active grievance record found for ID "${query}".`,
+          json?.error || `No active grievance record found for ID "${query}".`,
         );
       }
     } catch (err) {
       console.error("Tracking API error:", err);
       setErrorMessage(
-        "Network error while tracking complaint. Please try again.",
+        err.message || "Network error while tracking complaint. Please try again.",
       );
     } finally {
       setIsLoading(false);

@@ -5,8 +5,7 @@ export async function POST(request) {
     const incomingFormData = await request.formData();
 
     const image = incomingFormData.get("image");
-    const lat =
-      incomingFormData.get("lat") || incomingFormData.get("latitude");
+    const lat = incomingFormData.get("lat") || incomingFormData.get("latitude");
     const lng =
       incomingFormData.get("lng") || incomingFormData.get("longitude");
     const text =
@@ -21,7 +20,7 @@ export async function POST(request) {
           success: false,
           error: "Infrastructure issue photo is compulsory.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -31,16 +30,12 @@ export async function POST(request) {
           success: false,
           error: "Incident location coordinates (lat and lng) are compulsory.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const apiUrl =
-      process.env.COMPLAINTS_API_URL ||
-      "https://test-ciga-ai.onrender.com/api/complaints";
-    const apiKey =
-      process.env.COMPLAINTS_API_KEY ||
-      "e5q2V2sJkkdEQUXe_-ETzy3UjrQreotz8QrT5gcHqKU";
+    const apiUrl = process.env.COMPLAINTS_API_URL;
+    const apiKey = process.env.COMPLAINTS_API_KEY;
 
     // Prepare outbound FormData matching backend expectations
     const outboundFormData = new FormData();
@@ -84,7 +79,7 @@ export async function POST(request) {
         error: errorMessage,
         details: responseData,
       },
-      { status: backendResponse.status || 400 }
+      { status: backendResponse.status || 400 },
     );
   } catch (error) {
     console.error("Complaints submission error:", error);
@@ -93,7 +88,7 @@ export async function POST(request) {
         success: false,
         error: error.message || "Failed to submit grievance to the server.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
