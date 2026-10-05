@@ -1,4 +1,4 @@
--- Run this once in Supabase: SQL Editor > New query > paste > Run
+
 -- ---------------------------------------------------------------
 create extension if not exists postgis with schema extensions;
 

@@ -6,7 +6,7 @@ _FIELDS = """
   c.id, c.tracking_id, c.parent_id, p.tracking_id as parent_tracking_id,
   c.status, c.category, c.severity, c.is_urgent, c.department, c.summary,
   c.original_text_english, c.raw_text, c.transcript, c.image_url, c.audio_url,
-  c.lat, c.lng, c.report_count,
+  c.lat, c.lng, c.report_count, c.user_message, c.ai_decision,
   c.created_at, c.updated_at, c.acknowledged_at, c.resolved_at,
   c.deleted_at, c.deleted_by, c.delete_reason, c.deleted_at is not null as is_deleted
 """
@@ -67,7 +67,7 @@ def get_detail(by, value):
         row["sub_complaints"] = []
         if row["parent_id"] is None:
             row["sub_complaints"] = conn.execute(
-                "select tracking_id, status, image_url, created_at "
+                "select tracking_id, status, image_url, audio_url, user_message, ai_decision, created_at "
                 "from complaints where parent_id = %s and deleted_at is null order by id",
                 (row["id"],),
             ).fetchall()
@@ -93,7 +93,8 @@ def map_points(categories, statuses, bbox):
             "select c.tracking_id, c.parent_id is null as is_main, "
             "p.tracking_id as parent_tracking_id, "
             "c.lat, c.lng, c.category, c.severity, c.is_urgent, "
-            "c.status, c.report_count, c.created_at "
+            "c.status, c.report_count, c.image_url, c.audio_url, c.user_message, c.ai_decision, "
+            "c.created_at "
             f"{_FROM} {('where ' + ' and '.join(where)) if where else ''} order by c.id",
             params,
         ).fetchall()
@@ -119,7 +120,8 @@ def map_hotspots(categories, statuses, bbox):
         return conn.execute(
             """
             select c.tracking_id, c.lat, c.lng, c.category, c.severity, c.is_urgent,
-                   c.status, c.report_count, c.created_at,
+                   c.status, c.report_count, c.image_url, c.audio_url, c.user_message, c.ai_decision,
+                   c.created_at,
                    case c.severity
                      when 'urgent' then 4
                      when 'high' then 3

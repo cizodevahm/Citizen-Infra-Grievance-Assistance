@@ -49,3 +49,11 @@ def _check_database():
                 "Database is missing the soft-delete columns. "
                 "Run migrations/002_soft_delete_complaints.sql in the Supabase SQL editor."
             ) from None
+    with db_pool.connection() as conn:
+        try:
+            conn.execute("select user_message, ai_decision from complaints limit 0")
+        except psycopg.errors.UndefinedColumn:
+            raise RuntimeError(
+                "Database is missing the user_message / ai_decision columns. "
+                "Run migrations/003_user_message_ai_decision.sql in the Supabase SQL editor."
+            ) from None

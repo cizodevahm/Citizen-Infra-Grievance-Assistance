@@ -17,7 +17,7 @@ SCHEMA = {
         "type": "object",
         "additionalProperties": False,
         "required": ["valid", "rejection_reason", "category", "severity", "urgent",
-                     "department", "summary", "original_text_english"],
+                     "department", "summary", "original_text_english", "ai_decision"],
         "properties": {
             "valid": {"type": "boolean"},
             "rejection_reason": {"type": "string"},
@@ -29,6 +29,7 @@ SCHEMA = {
                            "enum": ["roads", "electricity", "water_supply", "drainage", "other", "none"]},
             "summary": {"type": "string"},
             "original_text_english": {"type": "string"},
+            "ai_decision": {"type": "string"},
         },
     },
 }

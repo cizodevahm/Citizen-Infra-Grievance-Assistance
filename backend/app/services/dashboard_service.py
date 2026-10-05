@@ -17,7 +17,8 @@ where deleted_at is null
 """
 
 _HOTSPOTS = """
-select tracking_id, category, lat, lng, report_count, is_urgent, status
+select tracking_id, category, lat, lng, report_count, is_urgent, status, image_url, audio_url,
+       user_message, ai_decision
 from complaints
 where deleted_at is null and parent_id is null and status <> 'completed' and report_count >= 2
 order by report_count desc, id

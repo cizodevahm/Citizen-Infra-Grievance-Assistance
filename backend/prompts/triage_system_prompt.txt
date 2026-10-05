@@ -22,3 +22,6 @@ Rules:
 - summary: one neutral English sentence describing the problem, for the department officer.
 - original_text_english: the citizen's message translated to English (from text or voice).
   If there is no text or voice, use "".
+- ai_decision: one or two short English sentences explaining what you decided and why, for the
+  officer reviewing the case: what you see in the photo and message, and why you chose this
+  valid/category/severity/urgent/department. Always fill this, also when valid=false.

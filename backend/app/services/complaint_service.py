@@ -30,12 +30,12 @@ limit 1
 _INSERT = """
 insert into complaints (
   tracking_id, parent_id, status, category, severity, is_urgent, department, summary,
-  original_text_english, raw_text, transcript, image_url, audio_url,
+  original_text_english, raw_text, transcript, user_message, ai_decision, image_url, audio_url,
   lat, lng, geom, acknowledged_at, ai_raw
 ) values (
   %(tracking_id)s, %(parent_id)s, %(status)s, %(category)s, %(severity)s, %(is_urgent)s,
   %(department)s, %(summary)s, %(original_text_english)s, %(raw_text)s, %(transcript)s,
-  %(image_url)s, %(audio_url)s, %(lat)s, %(lng)s,
+  %(user_message)s, %(ai_decision)s, %(image_url)s, %(audio_url)s, %(lat)s, %(lng)s,
   ST_SetSRID(ST_MakePoint(%(lng)s, %(lat)s), 4326)::geography,
   %(acknowledged_at)s, %(ai_raw)s
 )
@@ -86,10 +86,10 @@ def submit(image_bytes, audio, text, lat, lng):
             mimetype or "application/octet-stream",
         )
 
-    return create_complaint(ai, lat, lng, text, transcript, image_url, audio_url)
+    return create_complaint(ai, lat, lng, text, transcript, combined_text, image_url, audio_url)
 
 
-def create_complaint(ai, lat, lng, raw_text, transcript, image_url, audio_url):
+def create_complaint(ai, lat, lng, raw_text, transcript, user_message, image_url, audio_url):
     severity = "urgent" if ai["urgent"] else ai["severity"]
     is_urgent = bool(ai["urgent"]) or severity == "urgent"
 
@@ -117,6 +117,8 @@ def create_complaint(ai, lat, lng, raw_text, transcript, image_url, audio_url):
                 "original_text_english": ai["original_text_english"],
                 "raw_text": raw_text or None,
                 "transcript": transcript,
+                "user_message": user_message or None,
+                "ai_decision": ai["ai_decision"],
                 "image_url": image_url,
                 "audio_url": audio_url,
                 "lat": lat, "lng": lng,
@@ -139,6 +141,10 @@ def create_complaint(ai, lat, lng, raw_text, transcript, image_url, audio_url):
         "is_urgent": is_urgent,
         "department": ai["department"],
         "summary": ai["summary"],
+        "user_message": user_message or None,
+        "ai_decision": ai["ai_decision"],
+        "image_url": image_url,
+        "audio_url": audio_url,
         "is_merged": parent is not None,
         "parent_tracking_id": parent["tracking_id"] if parent else None,
         "report_count": report_count,
