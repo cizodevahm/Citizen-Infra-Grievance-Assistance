@@ -20,6 +20,29 @@ import AdminHotspotMap from "@/components/AdminHotspotMap";
 import Link from "next/link";
 import { getAdminDashboardStats } from "@/lib/api";
 
+// Helper to format average acknowledge time without duplicating units
+function formatAcknowledgeTime(val) {
+  if (val == null || val === "") return "N/A";
+  const str = String(val).trim();
+
+  // If the value already includes units (e.g., "19 mins", "2 hrs", "45 min", "1 hr 15 mins")
+  if (/(?:min|hr|hour|day|sec)/i.test(str)) {
+    return str;
+  }
+
+  // If it's a numeric value without unit
+  const num = Number(str);
+  if (!isNaN(num)) {
+    if (num === 0) return "0 mins";
+    if (num < 1) {
+      return `${Math.round(num * 60)} mins`;
+    }
+    return `${num} hrs`;
+  }
+
+  return str;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -303,9 +326,7 @@ export default function AdminPage() {
                 </div>
               ) : (
                 <div className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
-                  {stats?.avg_time_to_acknowledge != null
-                    ? `${stats.avg_time_to_acknowledge} hrs`
-                    : "N/A"}
+                  {formatAcknowledgeTime(stats?.avg_time_to_acknowledge)}
                 </div>
               )}
             </CardContent>
