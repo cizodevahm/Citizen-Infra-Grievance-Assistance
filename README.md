@@ -7,18 +7,19 @@ An AI-powered civic infrastructure grievance reporting and administrative resolu
 ## 📋 Table of Contents
 
 - [Project Architecture](#-project-architecture)
+- [Frontend Setup & Execution (Next.js 16)](#-frontend-setup--execution-nextjs-16)
+  - [Frontend Prerequisites & Requirements](#frontend-prerequisites--requirements)
+  - [How to Run the Frontend](#how-to-run-the-frontend)
+  - [Frontend Environment Variables (`.env.local`)](#frontend-environment-variables-envlocal)
+  - [Default Routes](#default-routes)
 - [Backend Setup & Execution (Python / Flask)](#-backend-setup--execution-python--flask)
   - [Backend Requirements](#backend-requirements)
   - [How to Run the Backend](#how-to-run-the-backend)
   - [Backend Environment Variables (`.env`)](#backend-environment-variables-env)
   - [Database Migrations](#database-migrations)
   - [API Endpoints & Documentation](#api-endpoints--documentation)
-- [Frontend Setup & Execution (Next.js 16)](#-frontend-setup--execution-nextjs-16)
-  - [Frontend Prerequisites & Requirements](#frontend-prerequisites--requirements)
-  - [How to Run the Frontend](#how-to-run-the-frontend)
-  - [Frontend Environment Variables (`.env.local`)](#frontend-environment-variables-envlocal)
-  - [Default Routes](#default-routes)
-- [API Key Mapping (Backend ↔ Frontend)](#-api-key-mapping-backend--frontend)
+  - [Backend Test Cases & Verification](#-backend-test-cases--verification)
+- [API Key Mapping (Frontend ↔ Backend)](#-api-key-mapping-frontend--backend)
 
 ---
 
@@ -26,10 +27,104 @@ An AI-powered civic infrastructure grievance reporting and administrative resolu
 
 ```
 Citizen-Infra-Grievance-Assistance/
-├── backend/                # Python 3.11+ / Flask Civic Infrastructure Backend API
 ├── frontend/               # Next.js 16 (App Router) Web Client & Admin Dashboard
+├── backend/                # Python 3.11+ / Flask Civic Infrastructure Backend API
 └── README.md               # Unified Project Documentation
 ```
+
+---
+
+## 💻 Frontend Setup & Execution (Next.js 16)
+
+### Frontend Prerequisites & Requirements
+
+| Requirement | Supported Version | Notes |
+| :--- | :--- | :--- |
+| **Node.js** | `>= 18.18.0` (Recommended: `v20.x` or `v22.x`) | Check with `node -v` |
+| **npm** | `>= 9.x` (Recommended: `10.x`) | Comes with Node.js (`npm -v`) |
+| **Operating System** | Windows, macOS, or Linux | Cross-platform |
+| **Modern Browser** | Chrome, Edge, Firefox, Safari | Audio Recording & Geolocation required |
+| **Backend API** | Running instance | Local: `http://127.0.0.1:5000` or Remote |
+
+---
+
+### How to Run the Frontend
+
+#### 1. Navigate to the Frontend Directory
+
+```bash
+cd frontend
+```
+
+#### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+> **Note:** If you encounter dependency peer warnings with React 19, run:
+> ```bash
+> npm install --legacy-peer-deps
+> ```
+
+#### 3. Configure Environment Variables (`frontend/.env.local`)
+
+Create or update `frontend/.env.local`:
+
+```env
+# ==========================================
+# Citizen Infra Grievance Assistance Environment
+# ==========================================
+
+# Base Backend API URL (Local development or Remote server)
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:5000
+
+# Frontend Client API Keys (Must match backend KEY_* values)
+NEXT_PUBLIC_COMPLAINTS_API_KEY=<unique-key-submit-complaint>
+NEXT_PUBLIC_TRACKING_API_KEY=<unique-key-track-complaint>
+NEXT_PUBLIC_ADMIN_API_KEY=<unique-key-dashboard-stats>
+NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
+NEXT_PUBLIC_UPDATE_STATUS_API_KEY=<unique-key-update-status>
+NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
+NEXT_PUBLIC_MAP_POINTS_API_KEY=<unique-key-map-points>
+
+# Server-Side Fallback Keys
+BACKEND_URL=http://127.0.0.1:5000
+COMPLAINTS_API_KEY=<unique-key-submit-complaint>
+TRACKING_API_KEY=<unique-key-track-complaint>
+ADMIN_API_KEY=<unique-key-dashboard-stats>
+COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
+UPDATE_STATUS_API_KEY=<unique-key-update-status>
+DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
+MAP_POINTS_API_KEY=<unique-key-map-points>
+```
+
+#### 4. Start the Frontend Server
+
+**Development Mode:**
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+**Production Build & Launch:**
+```bash
+# 1. Build the production bundle
+npm run build
+
+# 2. Run the production server
+npm run start
+```
+
+---
+
+### Default Routes
+
+| Path | Description | Access |
+| :--- | :--- | :--- |
+| `/` | Public Citizen Reporting & Ticket Tracking | Public |
+| `/login` | Administrator Sign In | Public |
+| `/admin` | Live Geospatial Map & Incident Management Table | Administrators |
 
 ---
 
@@ -141,6 +236,10 @@ python run.py
 ```
 The backend API will be available at `http://127.0.0.1:5000`.
 
+**Production Server:**
+```bash
+gunicorn -w 2 -b 0.0.0.0:8000 run:app
+```
 
 ---
 
@@ -156,6 +255,7 @@ X-API-Key: <endpoint-specific-key>
 
 | Method | Endpoint | Required API Key | Purpose |
 | :--- | :--- | :--- | :--- |
+| `GET` | `/health` | None | Health check endpoint |
 | `POST` | `/api/complaints` | `KEY_SUBMIT_COMPLAINT` | Submit a new complaint (image + GPS) |
 | `GET` | `/api/complaints/track/<tracking_id>` | `KEY_TRACK_COMPLAINT` | Track complaint details by tracking ID |
 | `GET` | `/api/complaints` | `KEY_LIST_COMPLAINTS` | List, paginate, and filter complaints |
@@ -165,104 +265,29 @@ X-API-Key: <endpoint-specific-key>
 | `GET` | `/api/admin/dashboard/stats` | `KEY_DASHBOARD_STATS` | Get admin dashboard statistics |
 | `GET` | `/api/map/points` | `KEY_MAP_POINTS` | Get live map points and cluster hotspots |
 
+---
+
+### 🧪 Backend Test Cases & Verification
+
+#### 1. Upload photos/voice note (Pothole Case)
+
+![Upload photos/voice note - Pothole](<backend/assests/Pot hole.png>)
+
+#### 2. Upload photos/voice note (Drainage Case)
+
+![Upload photos/voice note - Drainage](<backend/assests/Drainage.png>)
+
+#### 3. Blur Image Validation Case
+
+![Blur Image Case](<backend/assests/Blur Image case.png>)
+
+#### 4. Admin Dashboard Verification
+
+![Admin Dashboard](<backend/assests/Admin Dashboard.png>)
 
 ---
 
-## 💻 Frontend Setup & Execution (Next.js 16)
-
-### Frontend Prerequisites & Requirements
-
-| Requirement | Supported Version | Notes |
-| :--- | :--- | :--- |
-| **Node.js** | `>= 18.18.0` (Recommended: `v20.x` or `v22.x`) | Check with `node -v` |
-| **npm** | `>= 9.x` (Recommended: `10.x`) | Comes with Node.js (`npm -v`) |
-| **Operating System** | Windows, macOS, or Linux | Cross-platform |
-| **Modern Browser** | Chrome, Edge, Firefox, Safari | Audio Recording & Geolocation required |
-| **Backend API** | Running instance | Local: `http://127.0.0.1:5000` or Remote |
-
----
-
-### How to Run the Frontend
-
-#### 1. Navigate to the Frontend Directory
-
-```bash
-cd frontend
-```
-
-#### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-> **Note:** If you encounter dependency peer warnings with React 19, run:
-> ```bash
-> npm install --legacy-peer-deps
-> ```
-
-#### 3. Configure Environment Variables (`frontend/.env.local`)
-
-Create or update `frontend/.env.local`:
-
-```env
-# ==========================================
-# Citizen Infra Grievance Assistance Environment
-# ==========================================
-
-# Base Backend API URL (Local development or Remote server)
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:5000
-
-# Frontend Client API Keys (Must match backend KEY_* values)
-NEXT_PUBLIC_COMPLAINTS_API_KEY=<unique-key-submit-complaint>
-NEXT_PUBLIC_TRACKING_API_KEY=<unique-key-track-complaint>
-NEXT_PUBLIC_ADMIN_API_KEY=<unique-key-dashboard-stats>
-NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
-NEXT_PUBLIC_UPDATE_STATUS_API_KEY=<unique-key-update-status>
-NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
-NEXT_PUBLIC_MAP_POINTS_API_KEY=<unique-key-map-points>
-
-# Server-Side Fallback Keys
-BACKEND_URL=http://127.0.0.1:5000
-COMPLAINTS_API_KEY=<unique-key-submit-complaint>
-TRACKING_API_KEY=<unique-key-track-complaint>
-ADMIN_API_KEY=<unique-key-dashboard-stats>
-COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
-UPDATE_STATUS_API_KEY=<unique-key-update-status>
-DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
-MAP_POINTS_API_KEY=<unique-key-map-points>
-```
-
-#### 4. Start the Frontend Server
-
-**Development Mode:**
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-**Production Build & Launch:**
-```bash
-# 1. Build the production bundle
-npm run build
-
-# 2. Run the production server
-npm run start
-```
-
----
-
-### Default Routes
-
-| Path | Description | Access |
-| :--- | :--- | :--- |
-| `/` | Public Citizen Reporting & Ticket Tracking | Public |
-| `/login` | Administrator Sign In | Public |
-| `/admin` | Live Geospatial Map & Incident Management Table | Administrators |
-
----
-
-## 🔑 API Key Mapping (Backend ↔ Frontend)
+## 🔑 API Key Mapping (Frontend ↔ Backend)
 
 To ensure seamless communication between the Next.js frontend and the Flask backend, set the corresponding keys in both environments:
 

@@ -4,8 +4,7 @@
  */
 
 // Base Backend API URL from environment variables
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://18.145.114.24";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // API Keys from environment variables
 export const API_KEYS = {
@@ -361,4 +360,3 @@ export async function getMapPoints(params = {}) {
 
   return result;
 }
-
