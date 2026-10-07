@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   MapPin,
   Flame,
@@ -21,8 +27,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMapPoints, trackComplaint } from "@/lib/api";
 import "leaflet/dist/leaflet.css";
-
-
 
 // Color definitions for problem types
 const CATEGORY_COLORS = {
@@ -215,7 +219,8 @@ export default function AdminHotspotMap() {
           const rawSeverity = (item.severity || "medium").toLowerCase();
           const createdAt = item.created_at;
           const isOverdue = createdAt
-            ? Date.now() > new Date(createdAt).getTime() + 5 * 24 * 60 * 60 * 1000
+            ? Date.now() >
+              new Date(createdAt).getTime() + 5 * 24 * 60 * 60 * 1000
             : false;
           const effectiveSeverity = isOverdue ? "high" : rawSeverity;
 
@@ -266,7 +271,9 @@ export default function AdminHotspotMap() {
                     ? "Drainage & Sewerage Network"
                     : "Municipal Infrastructure Division",
               reasoning:
-                item.ai_decision || item.summary || "Incident reported and triaged.",
+                item.ai_decision ||
+                item.summary ||
+                "Incident reported and triaged.",
             },
             history: [
               {
@@ -298,7 +305,9 @@ export default function AdminHotspotMap() {
               return livePoints;
             }
             const hasChanges = livePoints.some((p) => {
-              const old = prev.find((item) => item.tracking_id === p.tracking_id);
+              const old = prev.find(
+                (item) => item.tracking_id === p.tracking_id,
+              );
               return (
                 !old ||
                 old.status !== p.status ||
@@ -331,7 +340,9 @@ export default function AdminHotspotMap() {
               id: hid,
               tracking_id: spot.tracking_id,
               rank: spot.severity_rank || idx + 1,
-              name: spot.tracking_id ? `Hotspot ${spot.tracking_id}` : `Cluster ${idx + 1}`,
+              name: spot.tracking_id
+                ? `Hotspot ${spot.tracking_id}`
+                : `Cluster ${idx + 1}`,
               reportsCount: spot.report_count || 1,
               avgAge: formatTimeAgo(spot.created_at),
               urgency: spot.is_urgent
@@ -360,11 +371,14 @@ export default function AdminHotspotMap() {
         Object.entries(clustersByLocation).forEach(([key, group]) => {
           const rep = group[0];
           const totalCount = group.reduce(
-            (acc, curr) => acc + (curr.report_count > 1 ? curr.report_count : 1),
+            (acc, curr) =>
+              acc + (curr.report_count > 1 ? curr.report_count : 1),
             0,
           );
           const hasExisting = Array.from(hotspotMap.values()).some(
-            (h) => Math.abs(h.lat - rep.lat) < 0.005 && Math.abs(h.lng - rep.lng) < 0.005
+            (h) =>
+              Math.abs(h.lat - rep.lat) < 0.005 &&
+              Math.abs(h.lng - rep.lng) < 0.005,
           );
 
           if (!hasExisting && (totalCount >= 2 || group.length >= 2)) {
@@ -394,9 +408,10 @@ export default function AdminHotspotMap() {
           }
         });
 
-        // Sort all hotspots by reportsCount descending and assign rank
+        // Sort all hotspots by reportsCount descending and take top 5
         const sortedHotspots = Array.from(hotspotMap.values())
           .sort((a, b) => b.reportsCount - a.reportsCount)
+          .slice(0, 5)
           .map((h, i) => ({ ...h, rank: i + 1 }));
 
         setAllHotspots(sortedHotspots);
@@ -405,7 +420,11 @@ export default function AdminHotspotMap() {
         }
 
         // Fit map bounds to points only on first load
-        if (leafletMapRef.current && livePoints.length > 0 && !hasInitialFitRef.current) {
+        if (
+          leafletMapRef.current &&
+          livePoints.length > 0 &&
+          !hasInitialFitRef.current
+        ) {
           import("leaflet").then((L) => {
             const validCoords = livePoints
               .filter((p) => !isNaN(p.lat) && !isNaN(p.lng) && p.lat !== 0)
@@ -551,7 +570,11 @@ export default function AdminHotspotMap() {
           }));
         }
       } catch (err) {
-        console.error("Failed to fetch full tracking detail for marker", trackingId, err);
+        console.error(
+          "Failed to fetch full tracking detail for marker",
+          trackingId,
+          err,
+        );
       } finally {
         setIsLoadingDetail(false);
       }
@@ -576,25 +599,26 @@ export default function AdminHotspotMap() {
     });
   }, [grievances, typeFilter, statusFilter]);
 
-  // Viewport-aware visible hotspots: update automatically when map is zoomed or panned
+  // Viewport-aware visible hotspots: update automatically when map is zoomed or panned (Top 5 only)
   const visibleHotspots = useMemo(() => {
-    if (!mapBounds) return allHotspots;
-    return allHotspots.filter((spot) => mapBounds.contains(spot.lat, spot.lng));
+    if (!mapBounds) return allHotspots.slice(0, 5);
+    return allHotspots
+      .filter((spot) => mapBounds.contains(spot.lat, spot.lng))
+      .slice(0, 5);
   }, [allHotspots, mapBounds]);
 
   // Count of grievances visible in the current map view
   const visibleGrievancesCount = useMemo(() => {
     if (!mapBounds) return filteredGrievances.length;
-    return filteredGrievances.filter((g) =>
-      mapBounds.contains(g.lat, g.lng)
-    ).length;
+    return filteredGrievances.filter((g) => mapBounds.contains(g.lat, g.lng))
+      .length;
   }, [filteredGrievances, mapBounds]);
 
   // Handle incoming live complaint
   const handleIncomingLiveReport = (newReport) => {
     setGrievances((prev) => {
       const exists = prev.some(
-        (g) => g.id === newReport.id || g.tracking_id === newReport.tracking_id
+        (g) => g.id === newReport.id || g.tracking_id === newReport.tracking_id,
       );
       if (exists) return prev;
       return [newReport, ...prev];
@@ -647,7 +671,10 @@ export default function AdminHotspotMap() {
       map.on("zoomend", updateMapBounds);
 
       // Trigger initial bounds calculation once tiles load
-      setTimeout(updateMapBounds, 250);
+      setTimeout(() => {
+        updateMapBounds();
+        if (map) map.invalidateSize();
+      }, 250);
 
       // Fit bounds if grievances already exist
       if (grievances.length > 0) {
@@ -700,10 +727,11 @@ export default function AdminHotspotMap() {
             // Render Single Combined Cluster Marker
             const rep = group[0];
             const hasHighSeverityOrUrgent = group.some(
-              (g) => checkIsHighSeverity(g) || Boolean(g.isUrgent)
+              (g) => checkIsHighSeverity(g) || Boolean(g.isUrgent),
             );
             const totalCount = group.reduce(
-              (acc, curr) => acc + (curr.report_count > 1 ? curr.report_count : 1),
+              (acc, curr) =>
+                acc + (curr.report_count > 1 ? curr.report_count : 1),
               0,
             );
 
@@ -747,7 +775,7 @@ export default function AdminHotspotMap() {
                   (other, oIdx) =>
                     oIdx !== idx &&
                     Math.abs(other.lat - item.lat) < 0.0003 &&
-                    Math.abs(other.lng - item.lng) < 0.0003
+                    Math.abs(other.lng - item.lng) < 0.0003,
                 );
 
               if (isCoLocated) {
@@ -837,14 +865,18 @@ export default function AdminHotspotMap() {
                 <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 Live Infrastructure Map & Cluster Analysis
               </CardTitle>
-              <Badge variant="secondary" className="text-[11px] font-mono font-bold">
+              <Badge
+                variant="secondary"
+                className="text-[11px] font-mono font-bold"
+              >
                 {mapBounds && visibleGrievancesCount !== grievances.length
                   ? `${visibleGrievancesCount} of ${grievances.length} Live Points in View`
                   : `${grievances.length || mapMeta?.total || 0} Live Points`}
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              OpenStreetMap live points view with backend cluster analysis and telemetry
+              OpenStreetMap live points view with backend cluster analysis and
+              telemetry
             </p>
           </div>
 
@@ -911,13 +943,13 @@ export default function AdminHotspotMap() {
         </CardHeader>
 
         {/* 2-Column Split: Map (Left) + Hotspot Box (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80 dark:divide-slate-800 min-h-[520px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80 dark:divide-slate-800 h-[527px] max-h-[527px] overflow-hidden">
           {/* MAP AREA (Left: ~68% width on large screens) */}
-          <div className="lg:col-span-8 relative flex flex-col min-h-[420px] lg:min-h-[520px]">
+          <div className="lg:col-span-8 relative flex flex-col h-[527px] max-h-[527px] overflow-hidden">
             {/* Interactive Leaflet Map Container */}
             <div
               ref={mapContainerRef}
-              className="w-full flex-1 min-h-[420px] z-10"
+              className="w-full h-full max-h-[527px] z-10"
             />
 
             {isLoadingMap && (
@@ -966,8 +998,8 @@ export default function AdminHotspotMap() {
           </div>
 
           {/* [HOTSPOT BOX: TOP 5 PRIORITY] (Right: ~32% width on large screens) */}
-          <div className="lg:col-span-4 p-4 sm:p-5 flex flex-col bg-slate-50/40 dark:bg-slate-900/30">
-            <div className="flex items-center justify-between mb-3">
+          <div className="lg:col-span-4 p-4 sm:p-5 flex flex-col bg-slate-50/40 dark:bg-slate-900/30 h-[527px] max-h-[527px] overflow-hidden">
+            <div className="flex items-center justify-between mb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400">
                   <Flame className="w-4 h-4" />
@@ -975,23 +1007,28 @@ export default function AdminHotspotMap() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                      Hotspot Box: Incident Clusters
+                      Top 5 Hotspots: Incident Clusters
                     </h4>
                     {visibleHotspots.length > 0 && (
-                      <Badge variant="secondary" className="text-[10px] font-mono font-bold">
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] font-mono font-bold"
+                      >
                         {visibleHotspots.length} in view
                       </Badge>
                     )}
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {mapBounds ? "Incident clusters in visible map view" : "High concentration incident zones"}
+                    {mapBounds
+                      ? "Top incident clusters in visible map view"
+                      : "Top high concentration incident zones"}
                   </p>
                 </div>
               </div>
             </div>
 
             {/* Hotspots List */}
-            <div className="space-y-2.5 flex-1 overflow-y-auto">
+            <div className="space-y-2.5 flex-1 overflow-y-auto min-h-0 pr-1.5 thin-scrollbar">
               {isLoadingMap ? (
                 <div className="py-16 text-center space-y-2 text-slate-400">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
@@ -1000,69 +1037,74 @@ export default function AdminHotspotMap() {
               ) : visibleHotspots.length === 0 ? (
                 <div className="py-16 text-center space-y-2 text-slate-400">
                   <Flame className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto" />
-                  <p className="text-xs font-medium text-slate-500">No active hotspots in this view</p>
-                  <p className="text-[11px] text-slate-400">Pan or zoom out to see other incident clusters</p>
+                  <p className="text-xs font-medium text-slate-500">
+                    No active hotspots in this view
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Pan or zoom out to see other incident clusters
+                  </p>
                 </div>
               ) : (
                 visibleHotspots.map((spot, idx) => {
-                const isActive = activeHotspotId === spot.id;
-                const isCritical = spot.urgency === "critical";
+                  const isActive = activeHotspotId === spot.id;
+                  const isCritical = spot.urgency === "critical";
 
-                return (
-                  <button
-                    key={spot.id}
-                    type="button"
-                    onClick={() => handleSelectHotspot(spot)}
-                    className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-white dark:bg-slate-800 border-blue-500 shadow-md ring-1 ring-blue-500/20"
-                        : "bg-white/80 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 border-slate-200 dark:border-slate-800 shadow-xs"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  return (
+                    <button
+                      key={spot.id}
+                      type="button"
+                      onClick={() => handleSelectHotspot(spot)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                        isActive
+                          ? "bg-white dark:bg-slate-800 border-blue-500 shadow-md ring-1 ring-blue-500/20"
+                          : "bg-white/80 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-slate-800/80 border-slate-200 dark:border-slate-800 shadow-xs"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              isCritical
+                                ? "bg-red-500 text-white"
+                                : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                            {spot.name}
+                          </span>
+                        </div>
+
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] font-semibold uppercase px-1.5 py-0 ${
                             isCritical
-                              ? "bg-red-500 text-white"
-                              : "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                              ? "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-200"
+                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                           }`}
                         >
-                          {idx + 1}
+                          {spot.reportsCount} rpts
+                        </Badge>
+                      </div>
+
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pl-7">
+                        <span className="flex items-center gap-1 font-mono">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          Avg {spot.avgAge}
                         </span>
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                          {spot.name}
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-0.5 hover:underline">
+                          Zoom to cluster <ArrowRight className="w-2.5 h-2.5" />
                         </span>
                       </div>
 
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] font-semibold uppercase px-1.5 py-0 ${
-                          isCritical
-                            ? "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-200"
-                            : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                        }`}
-                      >
-                        {spot.reportsCount} rpts
-                      </Badge>
-                    </div>
-
-                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pl-7">
-                      <span className="flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        Avg {spot.avgAge}
-                      </span>
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-0.5 hover:underline">
-                        Zoom to cluster <ArrowRight className="w-2.5 h-2.5" />
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 pl-7 line-clamp-1">
-                      {spot.description}
-                    </p>
-                  </button>
-                );
-              }))}
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 pl-7 line-clamp-1">
+                        {spot.description}
+                      </p>
+                    </button>
+                  );
+                })
+              )}
             </div>
 
             {/* Hotspot Help Banner */}
@@ -1079,7 +1121,7 @@ export default function AdminHotspotMap() {
       {/* COMPLAINT DETAIL INSPECTION MODAL */}
       {selectedGrievance && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-5">
+          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto thin-scrollbar rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-5">
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
@@ -1168,12 +1210,19 @@ export default function AdminHotspotMap() {
                       Infrastructure Damage Photo
                     </label>
                     <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 aspect-video shadow-inner flex items-center justify-center">
-                      {(selectedGrievance.citizenReport?.photoUrl || selectedGrievance.image_url) ? (
+                      {selectedGrievance.citizenReport?.photoUrl ||
+                      selectedGrievance.image_url ? (
                         <>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={selectedGrievance.citizenReport?.photoUrl || selectedGrievance.image_url}
-                            alt={selectedGrievance.title || "Infrastructure damage photo"}
+                            src={
+                              selectedGrievance.citizenReport?.photoUrl ||
+                              selectedGrievance.image_url
+                            }
+                            alt={
+                              selectedGrievance.title ||
+                              "Infrastructure damage photo"
+                            }
                             className="w-full h-full object-cover"
                           />
                           <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/70 backdrop-blur-xs text-[10px] text-white font-mono flex items-center gap-1">
@@ -1197,9 +1246,9 @@ export default function AdminHotspotMap() {
                       <span>Citizen Message</span>
                     </div>
 
-                    {(selectedGrievance.raw_text ||
-                      selectedGrievance.user_message ||
-                      selectedGrievance.citizenReport?.originalTranscript) ? (
+                    {selectedGrievance.raw_text ||
+                    selectedGrievance.user_message ||
+                    selectedGrievance.citizenReport?.originalTranscript ? (
                       <blockquote className="text-xs italic text-slate-700 dark:text-slate-300 border-l-2 border-blue-500 pl-2.5 py-0.5">
                         &ldquo;
                         {selectedGrievance.raw_text ||
@@ -1208,7 +1257,9 @@ export default function AdminHotspotMap() {
                         &rdquo;
                       </blockquote>
                     ) : (
-                      <p className="text-xs text-slate-400 italic">No text description provided.</p>
+                      <p className="text-xs text-slate-400 italic">
+                        No text description provided.
+                      </p>
                     )}
 
                     {/* Audio recording player */}
@@ -1224,19 +1275,22 @@ export default function AdminHotspotMap() {
                         />
                         {selectedGrievance.transcript && (
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
-                            Transcript: &ldquo;{selectedGrievance.transcript}&rdquo;
+                            Transcript: &ldquo;{selectedGrievance.transcript}
+                            &rdquo;
                           </p>
                         )}
                       </div>
                     )}
 
-                    {!selectedGrievance.audio_url && selectedGrievance.transcript && (
-                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
-                          Transcript: &ldquo;{selectedGrievance.transcript}&rdquo;
-                        </p>
-                      </div>
-                    )}
+                    {!selectedGrievance.audio_url &&
+                      selectedGrievance.transcript && (
+                        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                            Transcript: &ldquo;{selectedGrievance.transcript}
+                            &rdquo;
+                          </p>
+                        </div>
+                      )}
                   </div>
                 </div>
 
@@ -1267,11 +1321,12 @@ export default function AdminHotspotMap() {
                     </div>
                   )}
 
-                  {!selectedGrievance.ai_decision && !selectedGrievance.summary && (
-                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-xs text-slate-400 italic">
-                      No AI analysis available for this complaint.
-                    </div>
-                  )}
+                  {!selectedGrievance.ai_decision &&
+                    !selectedGrievance.summary && (
+                      <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-xs text-slate-400 italic">
+                        No AI analysis available for this complaint.
+                      </div>
+                    )}
 
                   {/* History Timeline */}
                   <div className="space-y-2">
