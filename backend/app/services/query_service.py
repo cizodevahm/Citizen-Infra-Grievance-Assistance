@@ -57,6 +57,8 @@ def get_detail(by, value):
         row = conn.execute(f"select {_FIELDS} {_FROM} where {column} = %s", (value,)).fetchone()
         if not row:  # soft-deleted rows are still returned, with is_deleted=true
             raise NotFoundError("Complaint not found.")
+        if row["is_deleted"]:
+            row["status"] = "deleted"
 
         row["history"] = conn.execute(
             "select old_status, new_status, changed_by, changed_at "

@@ -210,7 +210,8 @@ def delete_complaint(tracking_id, deleted_by, reason):
                 cur.execute(
                     """
                     update complaints
-                    set deleted_at = now(),
+                    set status = 'deleted',
+                        deleted_at = now(),
                         deleted_by = %(deleted_by)s,
                         delete_reason = %(reason)s,
                         updated_at = now()
