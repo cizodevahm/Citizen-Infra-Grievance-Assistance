@@ -68,6 +68,7 @@ class Config:
         "KEY_UPDATE_STATUS", "KEY_DASHBOARD_STATS", "KEY_MAP_POINTS", "KEY_CREATE_USER",
     )
 
+
     # attribute -> name in .env, where they differ
     ENV_NAMES = {
         "AWS_ACCESS_KEY_ID": "MY_AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY": "MY_AWS_SECRET_ACCESS_KEY",
@@ -88,6 +89,7 @@ class Config:
                 "(generate the API keys with: python scripts/generate_keys.py)."
             )
         values = [getattr(cls, k) for k in cls.API_KEY_NAMES]
+        values += [v for v in (getattr(cls, k) for k in cls.OPTIONAL_API_KEY_NAMES) if v]
         if len(set(values)) != len(values):
             raise RuntimeError("Every KEY_* value in .env must be different. "
                                "Run: python scripts/generate_keys.py")
