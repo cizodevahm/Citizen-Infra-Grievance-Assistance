@@ -1,4 +1,5 @@
 """Read-only queries: list, detail and map points."""
+from contextlib import nullcontext
 from .. import extensions as ext
 from ..errors import NotFoundError
 
@@ -50,10 +51,26 @@ def list_complaints(page, limit, categories, statuses, sort_by, order, main_only
     return rows, meta
 
 
-def get_detail(by, value):
+def get_public_tracking(tracking_id):
+    """Return only public status fields, never private details or linked tickets."""
+    with ext.db_pool.connection() as conn:
+        row = conn.execute(
+            """select tracking_id,
+                      case when deleted_at is not null then 'deleted' else status end as status,
+                      category, created_at, updated_at, acknowledged_at, resolved_at
+               from complaints where tracking_id = %s""", (tracking_id,),
+        ).fetchone()
+    if not row:
+        raise NotFoundError("Complaint not found.")
+    return {key: row[key] for key in (
+        "tracking_id", "status", "category", "created_at", "updated_at", "acknowledged_at", "resolved_at",
+    )}
+
+
+def get_detail(by, value, *, db_conn=None):
     """Full detail by 'tracking_id' or 'id', with history and linked tickets."""
     column = _LOOKUP[by]
-    with ext.db_pool.connection() as conn:
+    with (nullcontext(db_conn) if db_conn is not None else ext.db_pool.connection()) as conn:
         row = conn.execute(f"select {_FIELDS} {_FROM} where {column} = %s", (value,)).fetchone()
         if not row:  # soft-deleted rows are still returned, with is_deleted=true
             raise NotFoundError("Complaint not found.")

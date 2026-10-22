@@ -27,15 +27,6 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     TRANSCRIBE_MODEL = os.getenv("TRANSCRIBE_MODEL", "gpt-4o-transcribe")
 
-    # one API key per endpoint (see app/auth.py for which key unlocks which endpoint)
-    KEY_SUBMIT_COMPLAINT = os.getenv("KEY_SUBMIT_COMPLAINT", "")
-    KEY_TRACK_COMPLAINT = os.getenv("KEY_TRACK_COMPLAINT", "")
-    KEY_LIST_COMPLAINTS = os.getenv("KEY_LIST_COMPLAINTS", "")
-    KEY_GET_COMPLAINT = os.getenv("KEY_GET_COMPLAINT", "")
-    KEY_UPDATE_STATUS = os.getenv("KEY_UPDATE_STATUS", "")
-    KEY_DASHBOARD_STATS = os.getenv("KEY_DASHBOARD_STATS", "")
-    KEY_MAP_POINTS = os.getenv("KEY_MAP_POINTS", "")
-    KEY_CREATE_USER = os.getenv("KEY_CREATE_USER", "")
     SESSION_TTL_SECONDS = _int("SESSION_TTL_SECONDS", 8 * 60 * 60)
     CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
@@ -63,11 +54,6 @@ class Config:
         "DATABASE_URL", "OPENAI_API_KEY",
         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION", "S3_BUCKET",
     )
-    API_KEY_NAMES = (
-        "KEY_SUBMIT_COMPLAINT", "KEY_TRACK_COMPLAINT", "KEY_LIST_COMPLAINTS", "KEY_GET_COMPLAINT",
-        "KEY_UPDATE_STATUS", "KEY_DASHBOARD_STATS", "KEY_MAP_POINTS", "KEY_CREATE_USER",
-    )
-
 
     # attribute -> name in .env, where they differ
     ENV_NAMES = {
@@ -80,19 +66,13 @@ class Config:
         cls.validate_whatsapp()
         if cls.SESSION_TTL_SECONDS <= 0:
             raise RuntimeError("SESSION_TTL_SECONDS must be greater than zero.")
-        missing = [cls.ENV_NAMES.get(k, k) for k in cls.REQUIRED + cls.API_KEY_NAMES
+        missing = [cls.ENV_NAMES.get(k, k) for k in cls.REQUIRED
                    if not getattr(cls, k)]
         if missing:
             raise RuntimeError(
                 "Missing required environment variables: " + ", ".join(missing)
-                + ". Fill these values in backend/.env (see backend.env.example; preserve existing settings) "
-                "(generate the API keys with: python scripts/generate_keys.py)."
+                + ". Fill these values in backend/.env (see backend.env.example; preserve existing settings)."
             )
-        values = [getattr(cls, k) for k in cls.API_KEY_NAMES]
-        values += [v for v in (getattr(cls, k) for k in cls.OPTIONAL_API_KEY_NAMES) if v]
-        if len(set(values)) != len(values):
-            raise RuntimeError("Every KEY_* value in .env must be different. "
-                               "Run: python scripts/generate_keys.py")
 
     @classmethod
     def validate_whatsapp(cls):

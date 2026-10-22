@@ -1,7 +1,5 @@
 from flask import Blueprint, g, request
 
-from ..auth import admin_required
-
 from ..constants import CATEGORIES, STATUSES
 from ..errors import ValidationError
 from ..responses import ok
@@ -61,7 +59,7 @@ def list_complaints():
 
 @bp.get("/track/<tracking_id>")
 def track_complaint(tracking_id):
-    return ok(query_service.get_detail("tracking_id", normalize_tracking_id(tracking_id)))
+    return ok(query_service.get_public_tracking(normalize_tracking_id(tracking_id)))
 
 
 @bp.get("/<int:complaint_id>")
@@ -70,9 +68,8 @@ def get_complaint(complaint_id):
 
 
 @bp.patch("/<tracking_id>/status")
-@admin_required
 def update_status(tracking_id):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
     if not isinstance(body, dict):
         raise ValidationError("A JSON object is required.")
     new_status = str(body.get("status") or "").lower()
@@ -83,9 +80,8 @@ def update_status(tracking_id):
 
 
 @bp.delete("/<tracking_id>")
-@admin_required
 def delete_complaint(tracking_id):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True) if request.get_data() else {}
     if not isinstance(body, dict):
         raise ValidationError("A JSON object is required.")
     deleted_by = f"user:{g.admin_user_id}"
