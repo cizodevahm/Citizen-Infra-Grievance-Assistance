@@ -38,7 +38,7 @@ def create_app():
     app.json = AppJSONProvider(app)
 
     CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}},
-         allow_headers=["Content-Type", "X-API-Key"])
+         allow_headers=["Content-Type", "X-API-Key", "Authorization"])
 
     init_extensions(app)
     app.register_blueprint(api)

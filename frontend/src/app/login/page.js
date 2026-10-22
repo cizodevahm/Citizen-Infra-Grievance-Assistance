@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 import {
   Card,
@@ -25,44 +26,98 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginAdmin } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  // Prefilled static login credentials
-  const [email, setEmail] = useState("admin@gmail.com");
-  const [password, setPassword] = useState("CivicAdmin@2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleLogin = (e) => {
+  // If already authenticated, redirect to admin dashboard
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("ciga_user");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && (parsed.email || parsed.name)) {
+            router.replace("/admin");
+          }
+        } catch {}
+      }
+    }
+  }, [router]);
+
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+
     setIsLoading(true);
 
-    // Simulate static authentication
-    setTimeout(() => {
-      setIsLoading(false);
-      setIsSuccess(true);
+    try {
+      const response = await loginAdmin(cleanEmail, password);
 
-      // Save static session to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem(
-          "ciga_user",
-          JSON.stringify({
-            name: "Admin User ",
-            role: "Administrator",
-            email: email,
-            loginTime: new Date().toISOString(),
-          }),
-        );
+      if (response && response.success && response.data) {
+        const { user: userData, access_token, token_type, expires_in } =
+          response.data;
+
+        // Save authenticated session and tokens to localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "ciga_user",
+            JSON.stringify({
+              id: userData?.id,
+              name: userData?.name || "Admin User",
+              email: userData?.email || cleanEmail,
+              role: "Administrator",
+              access_token: access_token,
+              token_type: token_type || "Bearer",
+              expires_in: expires_in,
+              loginTime: new Date().toISOString(),
+            }),
+          );
+
+          if (access_token) {
+            localStorage.setItem("ciga_token", access_token);
+            localStorage.setItem("ciga_token_type", token_type || "Bearer");
+          }
+
+          // Dispatch event so other components (e.g. Navbar) react immediately
+          window.dispatchEvent(new Event("storage"));
+        }
+
+        setIsSuccess(true);
+
+        setTimeout(() => {
+          router.push("/admin");
+        }, 600);
+      } else {
+        const msg =
+          response?.error?.message ||
+          response?.error ||
+          "Authentication failed. Please verify your credentials.";
+        setError(msg);
       }
-
-      // Redirect to admin panel after brief success feedback
-      setTimeout(() => {
-        router.push("/admin");
-      }, 700);
-    }, 600);
+    } catch (err) {
+      setError(err.message || "Failed to sign in. Please verify your connection.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -103,13 +158,21 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
+              {/* Error Alert */}
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
               {/* Email / Username field */}
               <div className="space-y-1.5">
                 <Label
                   htmlFor="email"
                   className="text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
-                  Email / Employee ID
+                  Email Address
                 </Label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -117,10 +180,14 @@ export default function LoginPage() {
                     id="email"
                     type="email"
                     required
+                    autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (error) setError(null);
+                    }}
                     className="pl-9 h-10 text-sm font-mono text-slate-800 dark:text-slate-200"
-                    placeholder="admin@gmail.com"
+                    placeholder="admin@example.com"
                   />
                 </div>
               </div>
@@ -139,15 +206,20 @@ export default function LoginPage() {
                     id="password"
                     type={showPassword ? "text" : "password"}
                     required
+                    autoComplete="current-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError(null);
+                    }}
                     className="pl-9 pr-9 h-10 text-sm font-mono"
-                    placeholder="••••••••••••"
+                    placeholder="Enter your password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -156,14 +228,6 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
-              </div>
-
-              {/* Prefilled note banner */}
-              <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 text-[11px] text-slate-500 space-y-0.5">
-                <p className="font-medium text-slate-700 dark:text-slate-300">
-                  Static Demo Account
-                </p>
-                <p>Credentials are prefilled. Click Log In below to proceed.</p>
               </div>
             </CardContent>
 

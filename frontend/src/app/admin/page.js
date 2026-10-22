@@ -91,12 +91,21 @@ export default function AdminPage() {
         const stored = localStorage.getItem("ciga_user");
         if (stored) {
           try {
-            setUser(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            if (!parsed || (!parsed.email && !parsed.name)) {
+              localStorage.removeItem("ciga_user");
+              localStorage.removeItem("ciga_token");
+              localStorage.removeItem("ciga_token_type");
+              router.push("/login");
+              return;
+            }
+            setUser(parsed);
           } catch {
-            setUser({
-              name: "Admin User",
-              role: "Administrator",
-            });
+            localStorage.removeItem("ciga_user");
+            localStorage.removeItem("ciga_token");
+            localStorage.removeItem("ciga_token_type");
+            router.push("/login");
+            return;
           }
           setIsCheckingAuth(false);
           loadDashboardStats(false);
@@ -145,6 +154,8 @@ export default function AdminPage() {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("ciga_user");
+      localStorage.removeItem("ciga_token");
+      localStorage.removeItem("ciga_token_type");
       router.push("/login");
     }
   };

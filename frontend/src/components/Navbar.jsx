@@ -35,6 +35,8 @@ export default function Navbar() {
   const handleLogout = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("ciga_user");
+      localStorage.removeItem("ciga_token");
+      localStorage.removeItem("ciga_token_type");
       setLoggedInUser(null);
     }
   };

@@ -1,4 +1,6 @@
-from flask import Blueprint, request
+from flask import Blueprint, g, request
+
+from ..auth import admin_required
 
 from ..constants import CATEGORIES, STATUSES
 from ..errors import ValidationError
@@ -68,18 +70,24 @@ def get_complaint(complaint_id):
 
 
 @bp.patch("/<tracking_id>/status")
+@admin_required
 def update_status(tracking_id):
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        raise ValidationError("A JSON object is required.")
     new_status = str(body.get("status") or "").lower()
     if new_status not in STATUSES:
         raise ValidationError(f"'status' must be one of: {', '.join(STATUSES)}.")
-    changed_by = str(body.get("changed_by") or "admin")[:100]
+    changed_by = f"user:{g.admin_user_id}"
     return ok(complaint_service.update_status(normalize_tracking_id(tracking_id), new_status, changed_by))
 
 
 @bp.delete("/<tracking_id>")
+@admin_required
 def delete_complaint(tracking_id):
     body = request.get_json(silent=True) or {}
-    deleted_by = str(body.get("deleted_by") or body.get("changed_by") or "admin")[:100]
+    if not isinstance(body, dict):
+        raise ValidationError("A JSON object is required.")
+    deleted_by = f"user:{g.admin_user_id}"
     reason = str(body.get("reason") or body.get("delete_reason") or "").strip()[:500] or None
     return ok(complaint_service.delete_complaint(normalize_tracking_id(tracking_id), deleted_by, reason))

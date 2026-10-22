@@ -33,6 +33,7 @@ export const API_KEYS = {
 
 // All API Endpoints defined in one common dictionary
 export const API_ENDPOINTS = {
+  AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
   COMPLAINTS: `${API_BASE_URL}/api/complaints`,
   TRACK_COMPLAINT: (trackingId) =>
     `${API_BASE_URL}/api/complaints/track/${encodeURIComponent(trackingId)}`,
@@ -68,6 +69,31 @@ export const API_ENDPOINTS = {
     return `${API_BASE_URL}/api/map/points${qs ? `?${qs}` : ""}`;
   },
 };
+
+/**
+ * Retrieve the current authenticated user's access token from localStorage.
+ *
+ * @returns {string|null} Bearer access token if available, otherwise null.
+ */
+export function getAuthToken() {
+  if (typeof window === "undefined") return null;
+  const token = localStorage.getItem("ciga_token");
+  if (token && typeof token === "string" && token.trim()) {
+    return token.trim();
+  }
+  try {
+    const rawUser = localStorage.getItem("ciga_user");
+    if (rawUser) {
+      const parsed = JSON.parse(rawUser);
+      if (parsed?.access_token && typeof parsed.access_token === "string") {
+        return parsed.access_token.trim();
+      }
+    }
+  } catch {
+    // Ignore JSON parse errors
+  }
+  return null;
+}
 
 /**
  * Submit a new grievance/complaint to the backend.
@@ -244,12 +270,14 @@ export async function getComplaintsList(params = {}) {
  * @param {string} trackingId e.g. "RIF-6DMEXS"
  * @param {string} status e.g. "completed"
  * @param {string} [changedBy="admin"]
+ * @param {string} [token=null] Optional Bearer access token (automatically resolved from localStorage if omitted)
  * @returns {Promise<Object>} API response object { success: true, data: { ... } }
  */
 export async function updateComplaintStatus(
   trackingId,
   status,
   changedBy = "admin",
+  token = null,
 ) {
   if (!trackingId || !trackingId.trim()) {
     throw new Error("A tracking ID is required to update status.");
@@ -259,12 +287,19 @@ export async function updateComplaintStatus(
   }
 
   const cleanId = trackingId.trim();
+  const authToken = token || getAuthToken();
+
+  const headers = {
+    "X-API-Key": API_KEYS.UPDATE_STATUS,
+    "Content-Type": "application/json",
+  };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(API_ENDPOINTS.UPDATE_COMPLAINT_STATUS(cleanId), {
     method: "PATCH",
-    headers: {
-      "X-API-Key": API_KEYS.UPDATE_STATUS,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       status: status.trim().toLowerCase(),
       changed_by: changedBy || "admin",
@@ -291,9 +326,15 @@ export async function updateComplaintStatus(
  * @param {string} trackingId e.g. "RIF-U7MPBU"
  * @param {string} reason Reason for deletion, e.g. "duplicate report"
  * @param {string} [deletedBy="admin"] Name or identifier of the user deleting
+ * @param {string} [token=null] Optional Bearer access token (automatically resolved from localStorage if omitted)
  * @returns {Promise<Object>} API response object { success: true, data: { ... } }
  */
-export async function deleteComplaint(trackingId, reason, deletedBy = "admin") {
+export async function deleteComplaint(
+  trackingId,
+  reason,
+  deletedBy = "admin",
+  token = null,
+) {
   if (!trackingId || !trackingId.trim()) {
     throw new Error("A tracking ID is required to delete a complaint.");
   }
@@ -302,12 +343,19 @@ export async function deleteComplaint(trackingId, reason, deletedBy = "admin") {
   }
 
   const cleanId = trackingId.trim();
+  const authToken = token || getAuthToken();
+
+  const headers = {
+    "X-API-Key": API_KEYS.DELETE_COMPLAINT,
+    "Content-Type": "application/json",
+  };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
   const response = await fetch(API_ENDPOINTS.DELETE_COMPLAINT(cleanId), {
     method: "DELETE",
-    headers: {
-      "X-API-Key": API_KEYS.DELETE_COMPLAINT,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       deleted_by: deletedBy || "admin",
       reason: reason.trim(),
@@ -355,6 +403,46 @@ export async function getMapPoints(params = {}) {
       result?.error ||
       result?.message ||
       `Failed to fetch map points (${response.status})`;
+    throw new Error(errorMsg);
+  }
+
+  return result;
+}
+
+/**
+ * Authenticate administrative user via Backend Login API.
+ *
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<Object>} API response object { success: true, data: { user: {...}, access_token: "...", token_type: "Bearer", expires_in: ... } }
+ */
+export async function loginAdmin(email, password) {
+  if (!email || !email.trim()) {
+    throw new Error("A valid email address is required.");
+  }
+  if (!password) {
+    throw new Error("Password is required.");
+  }
+
+  const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: email.trim(),
+      password,
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok || !result.success) {
+    const errorMsg =
+      result?.error?.message ||
+      result?.error ||
+      result?.message ||
+      `Authentication failed (${response.status})`;
     throw new Error(errorMsg);
   }
 

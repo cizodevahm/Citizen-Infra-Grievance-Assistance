@@ -254,15 +254,20 @@ export default function AdminGrievanceTable() {
     setIsSavingEdit(true);
     setEditError(null);
 
-    // Retrieve logged-in admin user's name if available
+    // Retrieve logged-in admin user's name and token if available
     let changedBy = "admin";
+    let token = null;
     try {
       if (typeof window !== "undefined") {
+        token = localStorage.getItem("ciga_token");
         const stored = localStorage.getItem("ciga_user");
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.name) {
             changedBy = parsed.name.trim();
+          }
+          if (!token && parsed?.access_token) {
+            token = parsed.access_token;
           }
         }
       }
@@ -275,6 +280,7 @@ export default function AdminGrievanceTable() {
         trackingId,
         editStatus,
         changedBy,
+        token,
       );
 
       // Update state locally with new status and updated timestamps
@@ -322,15 +328,20 @@ export default function AdminGrievanceTable() {
     setIsDeleting(true);
     setDeleteError(null);
 
-    // Retrieve logged-in admin user's name if available
+    // Retrieve logged-in admin user's name and token if available
     let deletedBy = "admin";
+    let token = null;
     try {
       if (typeof window !== "undefined") {
+        token = localStorage.getItem("ciga_token");
         const stored = localStorage.getItem("ciga_user");
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.name) {
             deletedBy = parsed.name.trim();
+          }
+          if (!token && parsed?.access_token) {
+            token = parsed.access_token;
           }
         }
       }
@@ -339,7 +350,7 @@ export default function AdminGrievanceTable() {
     }
 
     try {
-      await deleteComplaint(trackingId, deleteReason.trim(), deletedBy);
+      await deleteComplaint(trackingId, deleteReason.trim(), deletedBy, token);
 
       // Remove deleted complaint from the active table list
       setRequests((prev) =>
