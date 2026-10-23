@@ -52,19 +52,8 @@ def list_complaints(page, limit, categories, statuses, sort_by, order, main_only
 
 
 def get_public_tracking(tracking_id):
-    """Return only public status fields, never private details or linked tickets."""
-    with ext.db_pool.connection() as conn:
-        row = conn.execute(
-            """select tracking_id,
-                      case when deleted_at is not null then 'deleted' else status end as status,
-                      category, created_at, updated_at, acknowledged_at, resolved_at
-               from complaints where tracking_id = %s""", (tracking_id,),
-        ).fetchone()
-    if not row:
-        raise NotFoundError("Complaint not found.")
-    return {key: row[key] for key in (
-        "tracking_id", "status", "category", "created_at", "updated_at", "acknowledged_at", "resolved_at",
-    )}
+    """Tracking intentionally exposes the full detail, including linked tickets."""
+    return get_detail("tracking_id", tracking_id)
 
 
 def get_detail(by, value, *, db_conn=None):

@@ -1,5 +1,6 @@
 """Create complaints (with the 50 m merge) and update their status."""
 import logging
+from contextlib import nullcontext
 
 from psycopg.types.json import Jsonb
 
@@ -58,7 +59,7 @@ values (%s, %s, %s, %s)
 """
 
 
-def submit(image_bytes, audio, text, lat, lng):
+def submit(image_bytes, audio, text, lat, lng, *, db_conn=None):
     """Whole submit flow. `audio` is None or (bytes, filename, mimetype)."""
     jpeg = ai_service.prepare_image(image_bytes)
 
@@ -70,7 +71,7 @@ def submit(image_bytes, audio, text, lat, lng):
     ai = ai_service.triage(combined_text, jpeg)
 
     if not ai["valid"] or ai["category"] == "none":
-        _log_rejection(ai, text, lat, lng)
+        _log_rejection(ai, text, lat, lng, db_conn=db_conn)
         raise RejectedError(
             ai.get("rejection_reason")
             or "This does not look like an infrastructure problem. Please send a clear photo of the issue."
@@ -86,14 +87,16 @@ def submit(image_bytes, audio, text, lat, lng):
             mimetype or "application/octet-stream",
         )
 
-    return create_complaint(ai, lat, lng, text, transcript, combined_text, image_url, audio_url)
+    return create_complaint(ai, lat, lng, text, transcript, combined_text, image_url, audio_url,
+                            db_conn=db_conn)
 
 
-def create_complaint(ai, lat, lng, raw_text, transcript, user_message, image_url, audio_url):
+def create_complaint(ai, lat, lng, raw_text, transcript, user_message, image_url, audio_url, *, db_conn=None):
     severity = "urgent" if ai["urgent"] else ai["severity"]
     is_urgent = bool(ai["urgent"]) or severity == "urgent"
 
-    with ext.db_pool.connection() as conn:  # commits on success, rolls back on error
+    # A worker supplies its transaction so complaint, ownership and result commit together.
+    with (nullcontext(db_conn) if db_conn is not None else ext.db_pool.connection()) as conn:
         with conn.cursor() as cur:
             cur.execute("select pg_advisory_xact_lock(%s)", (_LOCK_KEY,))
 
@@ -241,13 +244,14 @@ def _unique_tracking_id(cur):
     raise RuntimeError("Could not generate a unique tracking ID.")
 
 
-def _log_rejection(ai, text, lat, lng):
+def _log_rejection(ai, text, lat, lng, *, db_conn=None):
     try:
-        with ext.db_pool.connection() as conn:
-            conn.execute(
-                "insert into rejected_submissions (reason, raw_text, lat, lng, ai_raw) "
-                "values (%s, %s, %s, %s, %s)",
-                (ai.get("rejection_reason"), text or None, lat, lng, Jsonb(ai)),
-            )
+        with (nullcontext(db_conn) if db_conn is not None else ext.db_pool.connection()) as conn:
+            with conn.transaction():
+                conn.execute(
+                    "insert into rejected_submissions (reason, raw_text, lat, lng, ai_raw) "
+                    "values (%s, %s, %s, %s, %s)",
+                    (ai.get("rejection_reason"), text or None, lat, lng, Jsonb(ai)),
+                )
     except Exception:
-        logger.exception("Could not log rejected submission")
+        logger.error("Could not log rejected submission")

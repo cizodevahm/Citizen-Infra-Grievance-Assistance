@@ -6,10 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _int(name, default):
+def _int(name, default, *, strict=False):
     try:
         return int(os.getenv(name, default))
     except ValueError:
+        if strict:
+            raise RuntimeError(f"{name} must be an integer.") from None
         return default
 
 
@@ -27,7 +29,7 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     TRANSCRIBE_MODEL = os.getenv("TRANSCRIBE_MODEL", "gpt-4o-transcribe")
 
-    SESSION_TTL_SECONDS = _int("SESSION_TTL_SECONDS", 8 * 60 * 60)
+    SESSION_TTL_SECONDS = _int("SESSION_TTL_SECONDS", 28800, strict=True)
     CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
     DEDUP_RADIUS_METERS = _int("DEDUP_RADIUS_METERS", 50)

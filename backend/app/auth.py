@@ -8,12 +8,11 @@ from . import extensions as ext
 from .responses import fail
 
 # All other registered /api endpoints require an active admin session.
-# The WhatsApp route validates Meta's signature / verification token itself.
 PUBLIC_ENDPOINTS = {
     "api.complaints.submit_complaint",
     "api.complaints.track_complaint",
     "api.users.login",
-    "api.whatsapp.webhook",
+    "api.whatsapp.webhook",  # Meta challenge / HMAC verification, not an admin session.
 }
 
 
