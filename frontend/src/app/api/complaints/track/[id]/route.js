@@ -67,16 +67,13 @@ export async function GET(request, { params }) {
       );
     }
 
-    const backendUrl = process.env.BACKEND_URL;
-    const apiKey = process.env.BACKEND_API_KEY;
+    const backendUrl =
+      process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
 
     try {
       const response = await fetch(
         `${backendUrl}/api/complaints/track/${encodeURIComponent(trackingId)}`,
         {
-          headers: {
-            "X-API-Key": apiKey,
-          },
           cache: "no-store",
         },
       );

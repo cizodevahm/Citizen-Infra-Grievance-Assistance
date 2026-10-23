@@ -34,8 +34,10 @@ export async function POST(request) {
       );
     }
 
-    const apiUrl = process.env.COMPLAINTS_API_URL;
-    const apiKey = process.env.COMPLAINTS_API_KEY;
+    const backendBase =
+      process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    const apiUrl =
+      process.env.COMPLAINTS_API_URL || `${backendBase}/api/complaints`;
 
     // Prepare outbound FormData matching backend expectations
     const outboundFormData = new FormData();
@@ -54,9 +56,6 @@ export async function POST(request) {
 
     const backendResponse = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "X-API-Key": apiKey,
-      },
       body: outboundFormData,
     });
 

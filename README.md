@@ -19,7 +19,7 @@ An AI-powered civic infrastructure grievance reporting and administrative resolu
   - [Database Migrations](#database-migrations)
   - [API Endpoints & Documentation](#api-endpoints--documentation)
   - [Backend Test Cases & Verification](#-backend-test-cases--verification)
-- [API Key Mapping (Frontend ↔ Backend)](#-api-key-mapping-frontend--backend)
+- [Authentication & API Access Model](#-authentication--api-access-model)
 
 ---
 
@@ -77,27 +77,12 @@ Create or update `frontend/.env.local`:
 # ==========================================
 
 # Base Backend API URL (Local development or Remote server)
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:5000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000
 
-# Frontend Client API Keys (Must match backend KEY_* values)
-NEXT_PUBLIC_COMPLAINTS_API_KEY=<unique-key-submit-complaint>
-NEXT_PUBLIC_TRACKING_API_KEY=<unique-key-track-complaint>
-NEXT_PUBLIC_ADMIN_API_KEY=<unique-key-dashboard-stats>
-NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
-NEXT_PUBLIC_UPDATE_STATUS_API_KEY=<unique-key-update-status>
-NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
-NEXT_PUBLIC_MAP_POINTS_API_KEY=<unique-key-map-points>
-
-# Server-Side Fallback Keys
-BACKEND_URL=http://127.0.0.1:5000
-COMPLAINTS_API_KEY=<unique-key-submit-complaint>
-TRACKING_API_KEY=<unique-key-track-complaint>
-ADMIN_API_KEY=<unique-key-dashboard-stats>
-COMPLAINTS_LIST_API_KEY=<unique-key-list-complaints>
-UPDATE_STATUS_API_KEY=<unique-key-update-status>
-DELETE_COMPLAINT_API_KEY=<unique-key-update-status>
-MAP_POINTS_API_KEY=<unique-key-map-points>
+# Server-Side Fallback Backend URL
+BACKEND_URL=http://localhost:5000
 ```
+
 
 #### 4. Start the Frontend Server
 
@@ -176,14 +161,6 @@ Create the `.env` file:
 cp .env.example .env
 ```
 
-Generate the 7 endpoint API keys:
-
-```bash
-python scripts/generate_keys.py
-```
-
-Copy the generated keys into `.env`, then fill in the required credentials:
-
 ### Backend Environment Variables (`.env`)
 
 ```env
@@ -195,15 +172,6 @@ MY_AWS_SECRET_ACCESS_KEY=<aws-secret-key>
 MY_AWS_S3_BUCKET=<s3-bucket-name>
 
 OPENAI_API_KEY=<openai-api-key>
-
-# Endpoint API Keys (Generated via scripts/generate_keys.py)
-KEY_SUBMIT_COMPLAINT=<unique-key-submit-complaint>
-KEY_TRACK_COMPLAINT=<unique-key-track-complaint>
-KEY_LIST_COMPLAINTS=<unique-key-list-complaints>
-KEY_GET_COMPLAINT=<unique-key-get-complaint>
-KEY_UPDATE_STATUS=<unique-key-update-status>
-KEY_DASHBOARD_STATS=<unique-key-dashboard-stats>
-KEY_MAP_POINTS=<unique-key-map-points>
 ```
 
 > **Note:** The AWS S3 bucket must permit public read access to the image and audio URLs returned by the API.
@@ -212,11 +180,12 @@ KEY_MAP_POINTS=<unique-key-map-points>
 
 ### Database Migrations
 
-Run both migrations in this exact order using the **Supabase SQL Editor**:
+Run migrations in this exact order using the **Supabase SQL Editor**:
 
 ```text
 migrations/001_init.sql
 migrations/002_soft_delete_complaints.sql
+migrations/003_user_message_ai_decision.sql
 ```
 
 Or run them from the terminal once `DATABASE_URL` is set:
@@ -224,6 +193,7 @@ Or run them from the terminal once `DATABASE_URL` is set:
 ```bash
 psql "$DATABASE_URL" -f migrations/001_init.sql
 psql "$DATABASE_URL" -f migrations/002_soft_delete_complaints.sql
+psql "$DATABASE_URL" -f migrations/003_user_message_ai_decision.sql
 ```
 
 ---
@@ -245,25 +215,24 @@ gunicorn -w 2 -b 0.0.0.0:8000 run:app
 
 ### API Endpoints & Documentation
 
-All `/api/*` endpoints require the `X-API-Key` header:
+Public citizen endpoints require no authentication. All protected administrative endpoints require standard Bearer token authorization:
 
 ```http
-X-API-Key: <endpoint-specific-key>
+Authorization: Bearer <access_token>
 ```
 
-`GET /health` is public and does not require an API key.
-
-| Method | Endpoint | Required API Key | Purpose |
+| Method | Endpoint | Authorization | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | None | Health check endpoint |
-| `POST` | `/api/complaints` | `KEY_SUBMIT_COMPLAINT` | Submit a new complaint (image + GPS) |
-| `GET` | `/api/complaints/track/<tracking_id>` | `KEY_TRACK_COMPLAINT` | Track complaint details by tracking ID |
-| `GET` | `/api/complaints` | `KEY_LIST_COMPLAINTS` | List, paginate, and filter complaints |
-| `GET` | `/api/complaints/<id>` | `KEY_GET_COMPLAINT` | Get complaint details by numeric ID |
-| `PATCH` | `/api/complaints/<tracking_id>/status` | `KEY_UPDATE_STATUS` | Update complaint status |
-| `DELETE` | `/api/complaints/<tracking_id>` | `KEY_UPDATE_STATUS` | Soft-delete a complaint with reason |
-| `GET` | `/api/admin/dashboard/stats` | `KEY_DASHBOARD_STATS` | Get admin dashboard statistics |
-| `GET` | `/api/map/points` | `KEY_MAP_POINTS` | Get live map points and cluster hotspots |
+| `GET` | `/health` | Public | Health check endpoint |
+| `POST` | `/api/auth/login` | Public | Authenticate administrator and receive Bearer token |
+| `POST` | `/api/complaints` | Public | Submit a new complaint (image + GPS) |
+| `GET` | `/api/complaints/track/<tracking_id>` | Public | Track complaint details by tracking ID |
+| `GET` | `/api/admin/dashboard/stats` | `Bearer <token>` | Get admin dashboard statistics |
+| `GET` | `/api/complaints` | `Bearer <token>` | List, paginate, and filter complaints |
+| `GET` | `/api/complaints/<id>` | `Bearer <token>` | Get complaint details by numeric ID |
+| `PATCH` | `/api/complaints/<tracking_id>/status` | `Bearer <token>` | Update complaint status |
+| `DELETE` | `/api/complaints/<tracking_id>` | `Bearer <token>` | Soft-delete a complaint with reason |
+| `GET` | `/api/map/points` | `Bearer <token>` | Get live map points and cluster hotspots |
 
 ---
 
@@ -287,16 +256,13 @@ X-API-Key: <endpoint-specific-key>
 
 ---
 
-## 🔑 API Key Mapping (Frontend ↔ Backend)
+## 🔐 Authentication & API Access Model
 
-To ensure seamless communication between the Next.js frontend and the Flask backend, set the corresponding keys in both environments:
+The `X-API-Key` concept has been removed:
 
-| Frontend Key (`frontend/.env.local`) | Backend Key (`backend/.env`) | Target API Endpoint |
-| :--- | :--- | :--- |
-| `NEXT_PUBLIC_COMPLAINTS_API_KEY` | `KEY_SUBMIT_COMPLAINT` | `POST /api/complaints` |
-| `NEXT_PUBLIC_TRACKING_API_KEY` | `KEY_TRACK_COMPLAINT` | `GET /api/complaints/track/<id>` |
-| `NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY` | `KEY_LIST_COMPLAINTS` | `GET /api/complaints` |
-| `NEXT_PUBLIC_UPDATE_STATUS_API_KEY` | `KEY_UPDATE_STATUS` | `PATCH /api/complaints/<id>/status` |
-| `NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY` | `KEY_UPDATE_STATUS` | `DELETE /api/complaints/<id>` |
-| `NEXT_PUBLIC_ADMIN_API_KEY` | `KEY_DASHBOARD_STATS` | `GET /api/admin/dashboard/stats` |
-| `NEXT_PUBLIC_MAP_POINTS_API_KEY` | `KEY_MAP_POINTS` | `GET /api/map/points` |
+1. **Public Citizen Endpoints**:
+   - `POST /api/complaints`: Citizens file grievances with photos, GPS, text, and voice notes. No authentication headers required.
+   - `GET /api/complaints/track/<tracking_id>`: Citizens track their complaint by tracking code. No authentication headers required.
+2. **Administrative Access**:
+   - `POST /api/auth/login`: Administrator signs in with email and password to receive a Bearer session token.
+   - `Authorization: Bearer <token>`: Passed automatically by all admin calls (`/api/admin/dashboard/stats`, `/api/complaints`, `/api/complaints/<id>/status`, `/api/complaints/<id>`, `/api/map/points`).

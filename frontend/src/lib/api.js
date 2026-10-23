@@ -6,31 +6,6 @@
 // Base Backend API URL from environment variables
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-// API Keys from environment variables
-export const API_KEYS = {
-  COMPLAINTS:
-    process.env.NEXT_PUBLIC_COMPLAINTS_API_KEY ||
-    "e5q2V2sJkkdEQUXe_-ETzy3UjrQreotz8QrT5gcHqKU",
-  TRACKING:
-    process.env.NEXT_PUBLIC_TRACKING_API_KEY ||
-    "AwH0IukvjtwAc9lqpJ8MWrj2QZkIQ6MLKsww0Qoqs5g",
-  ADMIN:
-    process.env.NEXT_PUBLIC_ADMIN_API_KEY ||
-    "h7Dn_V0HqYBAKbdaACWVET3DAmVsbsuxoNKiOKjtx3s",
-  COMPLAINTS_LIST:
-    process.env.NEXT_PUBLIC_COMPLAINTS_LIST_API_KEY ||
-    "l5VlqCYhtC9OCLT-3ifm0yJzciW-Yd6NV7mQ-48t2zk",
-  UPDATE_STATUS:
-    process.env.NEXT_PUBLIC_UPDATE_STATUS_API_KEY ||
-    "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
-  DELETE_COMPLAINT:
-    process.env.NEXT_PUBLIC_DELETE_COMPLAINT_API_KEY ||
-    "v8ZLmsO6PefwCOTx7RpTY9aPJunrKJP4my1vzVpB5zY",
-  MAP_POINTS:
-    process.env.NEXT_PUBLIC_MAP_POINTS_API_KEY ||
-    "5SjJvF8lvgiMb54IHNiwr4KYrsyX4eGyEfvZD61RZC8",
-};
-
 // All API Endpoints defined in one common dictionary
 export const API_ENDPOINTS = {
   AUTH_LOGIN: `${API_BASE_URL}/api/auth/login`,
@@ -96,7 +71,23 @@ export function getAuthToken() {
 }
 
 /**
- * Submit a new grievance/complaint to the backend.
+ * Helper to construct authentication headers using Bearer token.
+ *
+ * @param {string|null} [token] Optional token override
+ * @param {Object} [extraHeaders] Additional headers to include
+ * @returns {Object} Headers object with Authorization if token is available
+ */
+function getAuthHeaders(token = null, extraHeaders = {}) {
+  const authToken = token || getAuthToken();
+  const headers = { ...extraHeaders };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  return headers;
+}
+
+/**
+ * Submit a new grievance/complaint to the backend (Public citizen endpoint).
  *
  * Compulsory fields:
  *  - image: File (Image of the civic issue)
@@ -139,9 +130,6 @@ export async function submitComplaint({ image, lat, lng, text, audio }) {
 
   const response = await fetch(API_ENDPOINTS.COMPLAINTS, {
     method: "POST",
-    headers: {
-      "X-API-Key": API_KEYS.COMPLAINTS,
-    },
     body: formData,
   });
 
@@ -160,7 +148,7 @@ export async function submitComplaint({ image, lat, lng, text, audio }) {
 }
 
 /**
- * Track an existing complaint status and history by tracking ID.
+ * Track an existing complaint status and history by tracking ID (Public citizen endpoint).
  *
  * @param {string} trackingId e.g. "RIF-7NRGN7"
  * @returns {Promise<Object>} API response object { success: true, data: { ... } }
@@ -173,9 +161,6 @@ export async function trackComplaint(trackingId) {
   const cleanId = trackingId.trim();
   const response = await fetch(API_ENDPOINTS.TRACK_COMPLAINT(cleanId), {
     method: "GET",
-    headers: {
-      "X-API-Key": API_KEYS.TRACKING,
-    },
   });
 
   const result = await response.json().catch(() => ({}));
@@ -193,16 +178,15 @@ export async function trackComplaint(trackingId) {
 }
 
 /**
- * Fetch aggregated admin dashboard statistics and metrics.
+ * Fetch aggregated admin dashboard statistics and metrics (Protected endpoint).
  *
+ * @param {string} [token=null] Optional Bearer token override
  * @returns {Promise<Object>} API response object { success: true, data: { ... } }
  */
-export async function getAdminDashboardStats() {
+export async function getAdminDashboardStats(token = null) {
   const response = await fetch(API_ENDPOINTS.ADMIN_STATS, {
     method: "GET",
-    headers: {
-      "X-API-Key": API_KEYS.ADMIN,
-    },
+    headers: getAuthHeaders(token),
   });
 
   const result = await response.json().catch(() => ({}));
@@ -220,7 +204,7 @@ export async function getAdminDashboardStats() {
 }
 
 /**
- * Fetch paginated and filtered complaints list from the backend.
+ * Fetch paginated and filtered complaints list from the backend (Protected endpoint).
  *
  * @param {Object} [params]
  * @param {number} [params.page=1]
@@ -229,15 +213,14 @@ export async function getAdminDashboardStats() {
  * @param {string} [params.order="desc"]
  * @param {string} [params.status]
  * @param {string} [params.category]
+ * @param {string} [token=null] Optional Bearer token override
  * @returns {Promise<Object>} API response object { success: true, data: [...], meta: { ... } }
  */
-export async function getComplaintsList(params = {}) {
+export async function getComplaintsList(params = {}, token = null) {
   const url = API_ENDPOINTS.COMPLAINTS_LIST(params);
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      "X-API-Key": API_KEYS.COMPLAINTS_LIST,
-    },
+    headers: getAuthHeaders(token),
   });
 
   const result = await response.json().catch(() => ({}));
@@ -263,7 +246,7 @@ export async function getComplaintsList(params = {}) {
 }
 
 /**
- * Update the status of an existing complaint by tracking ID.
+ * Update the status of an existing complaint by tracking ID (Protected endpoint).
  *
  * Supported status values: "pending", "processing", "completed"
  *
@@ -287,19 +270,9 @@ export async function updateComplaintStatus(
   }
 
   const cleanId = trackingId.trim();
-  const authToken = token || getAuthToken();
-
-  const headers = {
-    "X-API-Key": API_KEYS.UPDATE_STATUS,
-    "Content-Type": "application/json",
-  };
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
-  }
-
   const response = await fetch(API_ENDPOINTS.UPDATE_COMPLAINT_STATUS(cleanId), {
     method: "PATCH",
-    headers,
+    headers: getAuthHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify({
       status: status.trim().toLowerCase(),
       changed_by: changedBy || "admin",
@@ -321,7 +294,7 @@ export async function updateComplaintStatus(
 }
 
 /**
- * Delete a complaint by tracking ID with reason and attribution.
+ * Delete a complaint by tracking ID with reason and attribution (Protected endpoint).
  *
  * @param {string} trackingId e.g. "RIF-U7MPBU"
  * @param {string} reason Reason for deletion, e.g. "duplicate report"
@@ -343,19 +316,9 @@ export async function deleteComplaint(
   }
 
   const cleanId = trackingId.trim();
-  const authToken = token || getAuthToken();
-
-  const headers = {
-    "X-API-Key": API_KEYS.DELETE_COMPLAINT,
-    "Content-Type": "application/json",
-  };
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
-  }
-
   const response = await fetch(API_ENDPOINTS.DELETE_COMPLAINT(cleanId), {
     method: "DELETE",
-    headers,
+    headers: getAuthHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify({
       deleted_by: deletedBy || "admin",
       reason: reason.trim(),
@@ -377,22 +340,21 @@ export async function deleteComplaint(
 }
 
 /**
- * Fetch map points and hotspots for civic incidents with optional bounding coordinates.
+ * Fetch map points and hotspots for civic incidents with optional bounding coordinates (Protected endpoint).
  *
  * @param {Object} [params]
  * @param {number|string} [params.min_lat]
  * @param {number|string} [params.max_lat]
  * @param {number|string} [params.min_lng]
  * @param {number|string} [params.max_lng]
+ * @param {string} [token=null] Optional Bearer token override
  * @returns {Promise<Object>} API response object { success: true, data: [...], meta: {...}, hotspots: [...] }
  */
-export async function getMapPoints(params = {}) {
+export async function getMapPoints(params = {}, token = null) {
   const url = API_ENDPOINTS.MAP_POINTS(params);
   const response = await fetch(url, {
     method: "GET",
-    headers: {
-      "X-API-Key": API_KEYS.MAP_POINTS,
-    },
+    headers: getAuthHeaders(token),
   });
 
   const result = await response.json().catch(() => ({}));
@@ -410,7 +372,7 @@ export async function getMapPoints(params = {}) {
 }
 
 /**
- * Authenticate administrative user via Backend Login API.
+ * Authenticate administrative user via Backend Login API (Public endpoint).
  *
  * @param {string} email
  * @param {string} password
