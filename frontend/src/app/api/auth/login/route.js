@@ -19,9 +19,7 @@ export async function POST(request) {
     }
 
     const backendBaseUrl =
-      process.env.BACKEND_URL ||
-      process.env.NEXT_PUBLIC_API_BASE_URL ||
-      "http://localhost:5000";
+      process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
 
     const backendResponse = await fetch(`${backendBaseUrl}/api/auth/login`, {
       method: "POST",
@@ -55,7 +53,8 @@ export async function POST(request) {
         data: null,
         error: {
           code: "INTERNAL_ERROR",
-          message: error.message || "Failed to authenticate with backend server.",
+          message:
+            error.message || "Failed to authenticate with backend server.",
         },
       },
       { status: 500 },
