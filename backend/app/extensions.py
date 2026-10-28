@@ -31,7 +31,7 @@ def init_extensions(app, *, worker=False):
     # prepare_threshold=None is required when using Supabase's pooled connections (pgbouncer)
     db_pool = ConnectionPool(
         Config.DATABASE_URL,
-        min_size=0,
+        min_size=1,
         max_size=Config.DB_POOL_MAX,
         kwargs={"row_factory": dict_row, "prepare_threshold": None},
         check=ConnectionPool.check_connection,

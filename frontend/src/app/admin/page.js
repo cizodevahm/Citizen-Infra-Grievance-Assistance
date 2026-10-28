@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
@@ -18,7 +18,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import AdminGrievanceTable from "@/components/AdminGrievanceTable";
 import AdminHotspotMap from "@/components/AdminHotspotMap";
 import Link from "next/link";
-import { getAdminDashboardStats } from "@/lib/api";
+import { getAdminDashboardStats, isBackgroundPollPaused } from "@/lib/api";
 
 // Helper to format average acknowledge time without duplicating units
 function formatAcknowledgeTime(val) {
@@ -53,14 +53,19 @@ export default function AdminPage() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+  const isFetchingStatsRef = useRef(false);
 
   const loadDashboardStats = useCallback(async (isBackground = false) => {
+    if (isBackground && (isBackgroundPollPaused() || isFetchingStatsRef.current)) {
+      return;
+    }
+    isFetchingStatsRef.current = true;
     if (!isBackground) {
       setIsLoadingStats(true);
       setStatsError(null);
     }
     try {
-      const response = await getAdminDashboardStats();
+      const response = await getAdminDashboardStats(null, { isBackground });
       if (response && response.success && response.data) {
         setStats(response.data);
         setLastRefreshedAt(
@@ -70,15 +75,16 @@ export default function AdminPage() {
             second: "2-digit",
           }),
         );
-      } else if (!isBackground) {
+      } else if (!isBackground && !response?.aborted) {
         setStatsError(response?.error || "Failed to load dashboard metrics");
       }
     } catch (err) {
-      if (!isBackground) {
+      if (!isBackground && err.name !== "AbortError") {
         console.error("Dashboard stats error:", err);
         setStatsError(err.message || "Failed to load live statistics");
       }
     } finally {
+      isFetchingStatsRef.current = false;
       if (!isBackground) {
         setIsLoadingStats(false);
       }
@@ -123,7 +129,9 @@ export default function AdminPage() {
     if (isCheckingAuth) return;
 
     const interval = setInterval(() => {
-      loadDashboardStats(true);
+      if (!isBackgroundPollPaused()) {
+        loadDashboardStats(true);
+      }
     }, 3000);
 
     const handleSync = () => {

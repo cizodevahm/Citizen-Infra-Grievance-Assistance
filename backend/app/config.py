@@ -35,7 +35,7 @@ class Config:
     DEDUP_RADIUS_METERS = _int("DEDUP_RADIUS_METERS", 50)
     OVERDUE_DAYS = _int("OVERDUE_DAYS", 5)
     MAX_UPLOAD_MB = _int("MAX_UPLOAD_MB", 25)
-    DB_POOL_MAX = _int("DB_POOL_MAX", 2)
+    DB_POOL_MAX = _int("DB_POOL_MAX", 10)
 
     DEBUG = os.getenv("FLASK_DEBUG", "0") == "1"
     PORT = _int("PORT", 5000)

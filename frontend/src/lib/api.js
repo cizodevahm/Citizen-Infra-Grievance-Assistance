@@ -45,6 +45,47 @@ export const API_ENDPOINTS = {
   },
 };
 
+// Set to track active background AbortControllers
+const backgroundFetchControllers = new Set();
+let backgroundPollPausedUntil = 0;
+
+/**
+ * Check whether background polling is currently paused (e.g. during or shortly after a status update).
+ *
+ * @returns {boolean} True if background polling should be skipped.
+ */
+export function isBackgroundPollPaused() {
+  return Date.now() < backgroundPollPausedUntil;
+}
+
+/**
+ * Pause background polling for a given duration in milliseconds (default 3500ms).
+ *
+ * @param {number} [durationMs=3500] Duration in milliseconds.
+ */
+export function pauseBackgroundPolling(durationMs = 3500) {
+  backgroundPollPausedUntil = Math.max(
+    backgroundPollPausedUntil,
+    Date.now() + durationMs,
+  );
+}
+
+/**
+ * Instantly abort all pending in-flight background read requests (stats, map points, complaints list)
+ * to immediately free browser HTTP sockets and backend resources for high-priority status updates.
+ */
+export function abortBackgroundFetches() {
+  pauseBackgroundPolling(3500);
+  for (const controller of backgroundFetchControllers) {
+    try {
+      controller.abort();
+    } catch {
+      // Ignore abort errors
+    }
+  }
+  backgroundFetchControllers.clear();
+}
+
 /**
  * Retrieve the current authenticated user's access token from localStorage.
  *
@@ -181,26 +222,48 @@ export async function trackComplaint(trackingId) {
  * Fetch aggregated admin dashboard statistics and metrics (Protected endpoint).
  *
  * @param {string} [token=null] Optional Bearer token override
+ * @param {Object} [options={}] Optional parameters (e.g., isBackground, signal)
  * @returns {Promise<Object>} API response object { success: true, data: { ... } }
  */
-export async function getAdminDashboardStats(token = null) {
-  const response = await fetch(API_ENDPOINTS.ADMIN_STATS, {
-    method: "GET",
-    headers: getAuthHeaders(token),
-  });
-
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok || !result.success) {
-    const errorMsg =
-      result?.error?.message ||
-      result?.error ||
-      result?.message ||
-      `Failed to fetch dashboard stats (${response.status})`;
-    throw new Error(errorMsg);
+export async function getAdminDashboardStats(token = null, options = {}) {
+  const isBackground = options.isBackground ?? false;
+  if (isBackground && isBackgroundPollPaused()) {
+    return { success: false, aborted: true, paused: true };
   }
 
-  return result;
+  const controller = new AbortController();
+  if (isBackground) {
+    backgroundFetchControllers.add(controller);
+  }
+
+  try {
+    const response = await fetch(API_ENDPOINTS.ADMIN_STATS, {
+      method: "GET",
+      headers: getAuthHeaders(token),
+      signal: options.signal || controller.signal,
+      priority: isBackground ? "low" : "auto",
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.success) {
+      const errorMsg =
+        result?.error?.message ||
+        result?.error ||
+        result?.message ||
+        `Failed to fetch dashboard stats (${response.status})`;
+      throw new Error(errorMsg);
+    }
+
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return { success: false, aborted: true };
+    }
+    throw err;
+  } finally {
+    backgroundFetchControllers.delete(controller);
+  }
 }
 
 /**
@@ -214,40 +277,63 @@ export async function getAdminDashboardStats(token = null) {
  * @param {string} [params.status]
  * @param {string} [params.category]
  * @param {string} [token=null] Optional Bearer token override
+ * @param {Object} [options={}] Optional parameters (e.g., isBackground, signal)
  * @returns {Promise<Object>} API response object { success: true, data: [...], meta: { ... } }
  */
-export async function getComplaintsList(params = {}, token = null) {
-  const url = API_ENDPOINTS.COMPLAINTS_LIST(params);
-  const response = await fetch(url, {
-    method: "GET",
-    headers: getAuthHeaders(token),
-  });
-
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok || !result.success) {
-    const errorMsg =
-      result?.error?.message ||
-      result?.error ||
-      result?.message ||
-      `Failed to fetch complaints list (${response.status})`;
-    throw new Error(errorMsg);
+export async function getComplaintsList(params = {}, token = null, options = {}) {
+  const isBackground = options.isBackground ?? false;
+  if (isBackground && isBackgroundPollPaused()) {
+    return { success: false, aborted: true, paused: true };
   }
 
-  // If raw_text exists, set user_message to raw_text
-  if (result.success && Array.isArray(result.data)) {
-    result.data = result.data.map((item) => ({
-      ...item,
-      user_message: item.raw_text || item.user_message,
-    }));
+  const controller = new AbortController();
+  if (isBackground) {
+    backgroundFetchControllers.add(controller);
   }
 
-  return result;
+  try {
+    const url = API_ENDPOINTS.COMPLAINTS_LIST(params);
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(token),
+      signal: options.signal || controller.signal,
+      priority: isBackground ? "low" : "auto",
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.success) {
+      const errorMsg =
+        result?.error?.message ||
+        result?.error ||
+        result?.message ||
+        `Failed to fetch complaints list (${response.status})`;
+      throw new Error(errorMsg);
+    }
+
+    // If raw_text exists, set user_message to raw_text
+    if (result.success && Array.isArray(result.data)) {
+      result.data = result.data.map((item) => ({
+        ...item,
+        user_message: item.raw_text || item.user_message,
+      }));
+    }
+
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return { success: false, aborted: true };
+    }
+    throw err;
+  } finally {
+    backgroundFetchControllers.delete(controller);
+  }
 }
 
 /**
  * Update the status of an existing complaint by tracking ID (Protected endpoint).
  *
+ * Preemptively aborts any pending background polling fetches and executes with highest priority.
  * Supported status values: "pending", "processing", "completed"
  *
  * @param {string} trackingId e.g. "RIF-6DMEXS"
@@ -269,6 +355,10 @@ export async function updateComplaintStatus(
     throw new Error("A status value is required.");
   }
 
+  // Preempt any background polling so network and server handle the status update immediately
+  abortBackgroundFetches();
+  pauseBackgroundPolling(4000);
+
   const cleanId = trackingId.trim();
   const response = await fetch(API_ENDPOINTS.UPDATE_COMPLAINT_STATUS(cleanId), {
     method: "PATCH",
@@ -277,6 +367,7 @@ export async function updateComplaintStatus(
       status: status.trim().toLowerCase(),
       changed_by: changedBy || "admin",
     }),
+    priority: "high",
   });
 
   const result = await response.json().catch(() => ({}));
@@ -295,6 +386,8 @@ export async function updateComplaintStatus(
 
 /**
  * Delete a complaint by tracking ID with reason and attribution (Protected endpoint).
+ *
+ * Preemptively aborts any pending background polling fetches and executes with highest priority.
  *
  * @param {string} trackingId e.g. "RIF-U7MPBU"
  * @param {string} reason Reason for deletion, e.g. "duplicate report"
@@ -315,6 +408,10 @@ export async function deleteComplaint(
     throw new Error("Please provide a reason for deleting this complaint.");
   }
 
+  // Preempt any background polling so network and server handle the deletion immediately
+  abortBackgroundFetches();
+  pauseBackgroundPolling(4000);
+
   const cleanId = trackingId.trim();
   const response = await fetch(API_ENDPOINTS.DELETE_COMPLAINT(cleanId), {
     method: "DELETE",
@@ -323,6 +420,7 @@ export async function deleteComplaint(
       deleted_by: deletedBy || "admin",
       reason: reason.trim(),
     }),
+    priority: "high",
   });
 
   const result = await response.json().catch(() => ({}));
@@ -348,27 +446,49 @@ export async function deleteComplaint(
  * @param {number|string} [params.min_lng]
  * @param {number|string} [params.max_lng]
  * @param {string} [token=null] Optional Bearer token override
+ * @param {Object} [options={}] Optional parameters (e.g., isBackground, signal)
  * @returns {Promise<Object>} API response object { success: true, data: [...], meta: {...}, hotspots: [...] }
  */
-export async function getMapPoints(params = {}, token = null) {
-  const url = API_ENDPOINTS.MAP_POINTS(params);
-  const response = await fetch(url, {
-    method: "GET",
-    headers: getAuthHeaders(token),
-  });
-
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok || !result.success) {
-    const errorMsg =
-      result?.error?.message ||
-      result?.error ||
-      result?.message ||
-      `Failed to fetch map points (${response.status})`;
-    throw new Error(errorMsg);
+export async function getMapPoints(params = {}, token = null, options = {}) {
+  const isBackground = options.isBackground ?? false;
+  if (isBackground && isBackgroundPollPaused()) {
+    return { success: false, aborted: true, paused: true };
   }
 
-  return result;
+  const controller = new AbortController();
+  if (isBackground) {
+    backgroundFetchControllers.add(controller);
+  }
+
+  try {
+    const url = API_ENDPOINTS.MAP_POINTS(params);
+    const response = await fetch(url, {
+      method: "GET",
+      headers: getAuthHeaders(token),
+      signal: options.signal || controller.signal,
+      priority: isBackground ? "low" : "auto",
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.success) {
+      const errorMsg =
+        result?.error?.message ||
+        result?.error ||
+        result?.message ||
+        `Failed to fetch map points (${response.status})`;
+      throw new Error(errorMsg);
+    }
+
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return { success: false, aborted: true };
+    }
+    throw err;
+  } finally {
+    backgroundFetchControllers.delete(controller);
+  }
 }
 
 /**

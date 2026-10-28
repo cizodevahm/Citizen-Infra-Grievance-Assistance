@@ -25,7 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMapPoints, trackComplaint } from "@/lib/api";
+import { getMapPoints, trackComplaint, isBackgroundPollPaused } from "@/lib/api";
 import "leaflet/dist/leaflet.css";
 
 // Color definitions for problem types
@@ -194,16 +194,21 @@ export default function AdminHotspotMap() {
 
   // SSE & Live Incident Notification
   const [isSseConnected, setIsSseConnected] = useState(false);
+  const isFetchingMapRef = useRef(false);
 
   // Fetch live map points and clusters from backend API
   const fetchMapData = useCallback(async (isBackground = false) => {
+    if (isBackground && (isBackgroundPollPaused() || isFetchingMapRef.current)) {
+      return;
+    }
+    isFetchingMapRef.current = true;
     if (!isBackground) {
       setIsLoadingMap(true);
       setMapError(null);
     }
 
     try {
-      const result = await getMapPoints();
+      const result = await getMapPoints({}, null, { isBackground });
 
       if (result && result.success && Array.isArray(result.data)) {
         setMapMeta(result.meta || { total: result.data.length });
@@ -441,11 +446,12 @@ export default function AdminHotspotMap() {
         }
       }
     } catch (err) {
-      if (!isBackground) {
+      if (!isBackground && err.name !== "AbortError") {
         console.error("Failed to fetch live map points:", err);
         setMapError(err.message || "Failed to load live map points");
       }
     } finally {
+      isFetchingMapRef.current = false;
       if (!isBackground) {
         setIsLoadingMap(false);
       }
@@ -454,13 +460,20 @@ export default function AdminHotspotMap() {
 
   // Auto-poll every 2.5 seconds to detect and display new complaints within 3 seconds
   useEffect(() => {
-    fetchMapData(false);
+    const timer = setTimeout(() => {
+      fetchMapData(false);
+    }, 0);
 
     const pollInterval = setInterval(() => {
-      fetchMapData(true);
+      if (!isBackgroundPollPaused()) {
+        fetchMapData(true);
+      }
     }, 2500);
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(pollInterval);
+    };
   }, [fetchMapData]);
 
   // Instant refresh listener for in-app or cross-tab complaint submissions

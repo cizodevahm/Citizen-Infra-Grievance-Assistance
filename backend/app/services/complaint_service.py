@@ -191,9 +191,10 @@ def update_status(tracking_id, new_status, changed_by):
                     [(c["id"], c["status"], new_status, changed_by) for c in changing],
                 )
 
-    detail = get_detail("tracking_id", tracking_id)
-    detail["tickets_updated"] = len(changing)
-    return detail
+        # Reuse current connection to avoid waiting for another connection pool slot
+        detail = get_detail("tracking_id", tracking_id, db_conn=conn)
+        detail["tickets_updated"] = len(changing)
+        return detail
 
 
 def delete_complaint(tracking_id, deleted_by, reason):
@@ -230,9 +231,10 @@ def delete_complaint(tracking_id, deleted_by, reason):
                         (row["parent_id"],),
                     )
 
-    detail = get_detail("tracking_id", tracking_id)
-    detail["tickets_deleted"] = 1 if deleted else 0
-    return detail
+        # Reuse current connection to avoid waiting for another connection pool slot
+        detail = get_detail("tracking_id", tracking_id, db_conn=conn)
+        detail["tickets_deleted"] = 1 if deleted else 0
+        return detail
 
 
 def _unique_tracking_id(cur):

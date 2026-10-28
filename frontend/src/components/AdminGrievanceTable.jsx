@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -24,6 +24,8 @@ import {
   getComplaintsList,
   updateComplaintStatus,
   deleteComplaint,
+  abortBackgroundFetches,
+  isBackgroundPollPaused,
 } from "@/lib/api";
 
 // Category label helper
@@ -96,6 +98,7 @@ export default function AdminGrievanceTable() {
   // Filters & Sorting state
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const isFetchingRef = useRef(false);
   const [sortOrder, setSortOrder] = useState("desc"); // 'desc' = newest first, 'asc' = oldest first
 
   // Pagination state
@@ -121,6 +124,10 @@ export default function AdminGrievanceTable() {
 
   // Fetch Complaints from Backend API
   const fetchComplaints = useCallback(async (isBackground = false) => {
+    if (isBackground && (isBackgroundPollPaused() || isFetchingRef.current || editingRequest || deletingRequest)) {
+      return;
+    }
+    isFetchingRef.current = true;
     if (!isBackground) {
       setIsLoading(true);
       setErrorMessage(null);
@@ -141,29 +148,30 @@ export default function AdminGrievanceTable() {
         params.category = categoryFilter;
       }
 
-      const res = await getComplaintsList(params);
+      const res = await getComplaintsList(params, null, { isBackground });
 
       if (res && res.success && Array.isArray(res.data)) {
         setRequests(res.data);
         if (res.meta) {
           setMeta(res.meta);
         }
-      } else if (!isBackground) {
+      } else if (!isBackground && !res?.aborted) {
         setErrorMessage(
           res?.error || "Failed to load complaints from backend.",
         );
       }
     } catch (err) {
-      if (!isBackground) {
+      if (!isBackground && err.name !== "AbortError") {
         console.error("Error fetching complaints list:", err);
         setErrorMessage(err.message || "Network error loading complaints list.");
       }
     } finally {
+      isFetchingRef.current = false;
       if (!isBackground) {
         setIsLoading(false);
       }
     }
-  }, [page, limit, sortOrder, statusFilter, categoryFilter]);
+  }, [page, limit, sortOrder, statusFilter, categoryFilter, editingRequest, deletingRequest]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -183,7 +191,9 @@ export default function AdminGrievanceTable() {
   // Periodic poll every 3 seconds to keep table updated with newly submitted complaints
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchComplaints(true);
+      if (!isBackgroundPollPaused()) {
+        fetchComplaints(true);
+      }
     }, 3000);
 
     const handleSync = () => {
@@ -238,6 +248,7 @@ export default function AdminGrievanceTable() {
 
   // Open Edit Modal (only status can be edited)
   const handleOpenEdit = (req) => {
+    abortBackgroundFetches();
     setEditingRequest(req);
     setEditStatus(req.status || "pending");
     setEditError(null);
@@ -251,6 +262,7 @@ export default function AdminGrievanceTable() {
     const trackingId = editingRequest.tracking_id || editingRequest.id;
     if (!trackingId) return;
 
+    abortBackgroundFetches();
     setIsSavingEdit(true);
     setEditError(null);
 
@@ -298,6 +310,10 @@ export default function AdminGrievanceTable() {
 
       // Close modal
       setEditingRequest(null);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ciga_live_complaint"));
+      }
     } catch (err) {
       setEditError(err.message || "Failed to update status. Please try again.");
     } finally {
@@ -307,6 +323,7 @@ export default function AdminGrievanceTable() {
 
   // Open Delete Modal
   const handleOpenDelete = (req) => {
+    abortBackgroundFetches();
     setDeletingRequest(req);
     setDeleteReason("");
     setDeleteError(null);
@@ -325,6 +342,7 @@ export default function AdminGrievanceTable() {
       return;
     }
 
+    abortBackgroundFetches();
     setIsDeleting(true);
     setDeleteError(null);
 
@@ -366,6 +384,10 @@ export default function AdminGrievanceTable() {
       // Close modal and reset state
       setDeletingRequest(null);
       setDeleteReason("");
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("ciga_live_complaint"));
+      }
     } catch (err) {
       setDeleteError(
         err.message || "Failed to delete complaint. Please try again.",
