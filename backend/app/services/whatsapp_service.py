@@ -44,16 +44,15 @@ def menu(body="Choose an option:"):
 def location_request():
     return {"type": "interactive", "interactive": {
         "type": "location_request_message",
-        "body": {"text": "Photo received. Tap Send location below and share the location of the issue. "
-                         "If needed, use attachment → Location to share a pin."},
+        "body": {"text": "Photo received. Please do send us a current location of the issue. Tap  \"Send location\""},
         "action": {"name": "send_location"},
     }}
 
 
 def description_request():
     return buttons(
-        "Send a short text description or voice note. Sending it submits your complaint automatically. "
-        "Skip submits without an additional description. Send Cancel or Menu to stop before submission.",
+        "Optional: Please send a brief text description OR voice note. "
+        "You can skip if you don't want to add text/voice.",
         [("skip", "Skip")],
     )
 

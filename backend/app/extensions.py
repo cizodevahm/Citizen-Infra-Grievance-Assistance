@@ -86,3 +86,13 @@ def _check_database():
                     "WhatsApp schema is missing or incompatible. Inspect the existing tables; "
                     "migrations/005_whatsapp.sql is for fresh setup, not a repair migration."
                 ) from None
+
+        with db_pool.connection() as conn:
+            try:
+                conn.execute("select submission_id, stage, image_bytes, findings from whatsapp_processing_jobs limit 0")
+                conn.execute("select submission_id from whatsapp_outbox limit 0")
+            except (psycopg.errors.UndefinedTable, psycopg.errors.UndefinedColumn):
+                raise RuntimeError(
+                    "WhatsApp background processing schema is missing. "
+                    "Run migrations/006_whatsapp_processing.sql before starting the workers."
+                ) from None

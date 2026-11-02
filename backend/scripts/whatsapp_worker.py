@@ -10,13 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import extensions as ext
 from app.config import Config
-from app.services import whatsapp_queue
+from app.services import whatsapp_queue, whatsapp_processing_service
 
 logger = logging.getLogger("whatsapp_worker")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Process the WhatsApp inbox and outgoing replies.")
+def main(*, processing=False):
+    parser = argparse.ArgumentParser(description="Process WhatsApp photo jobs." if processing else "Process the WhatsApp inbox and outgoing replies.")
     parser.add_argument("--once", action="store_true", help="Process at most one event and one reply, then exit.")
     args = parser.parse_args()
     stopping = threading.Event()
@@ -28,12 +28,14 @@ def main():
             logger.error("WhatsApp is disabled; set WHATSAPP_ENABLED=true to run the worker.")
             return 1
         ext.init_extensions(None, worker=True)
-        logger.info("WhatsApp worker ready; shutdown waits for the current transaction.")
+        logger.info("WhatsApp %s worker ready [ack-before-final-v1]; shutdown waits for the current transaction.",
+                    "processing" if processing else "chat")
         failures = 0
         while not stopping.is_set():
             try:
-                incoming = whatsapp_queue.process_event()
-                outgoing = False if stopping.is_set() else whatsapp_queue.send_outbox()
+                incoming = (whatsapp_processing_service.process_job() if processing
+                            else whatsapp_queue.process_event())
+                outgoing = False if stopping.is_set() or processing else whatsapp_queue.send_outbox()
                 failures = 0
             except Exception as error:
                 # DB connection failures roll back transactions. Never log exception contents.

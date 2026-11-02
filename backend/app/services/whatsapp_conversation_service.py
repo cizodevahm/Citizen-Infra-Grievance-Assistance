@@ -7,8 +7,7 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from ..config import Config
-from ..errors import RejectedError, ValidationError
-from . import ai_service, complaint_service, whatsapp_service as transport
+from . import whatsapp_service as transport
 from .tracking import normalize_tracking_id
 
 _TRACKING = re.compile(r"RIF-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}")
@@ -82,33 +81,26 @@ def _result(row):
 
 
 def _submit(conn, event, draft, description=None, voice=None):
-    # The conversation row is locked. A committed submission is reused on any replay.
-    existing = conn.execute(
-        """select c.tracking_id, c.status from whatsapp_complaints w
-           join complaints c on c.id=w.complaint_id
-           where w.submission_id=%s and w.phone_number_id=%s and w.sender_id=%s""",
-        (draft["submission_id"], event["phone_number_id"], event["sender_id"]),
-    ).fetchone()
-    if existing:
-        clear(conn, event)
-        return _result(existing)
-    image, _, _ = transport.download_media(draft["image_id"], "image")
-    audio = transport.download_media(voice["id"], "audio") if voice else None
-    text = "\n".join(part for part in (draft.get("caption"), description) if part)
-    try:
-        result = complaint_service.submit(image, audio, text, draft["lat"], draft["lng"], db_conn=conn)
-    except RejectedError as error:
-        clear(conn, event)
-        return transport.menu(f"Complaint not accepted: {error.message[:800]}\nChoose New complaint to try again.")
-    # Keep the web submission response unchanged; find the ID inside this same transaction.
-    complaint = conn.execute("select id from complaints where tracking_id=%s", (result["tracking_id"],)).fetchone()
+    # No media or AI work in the chat worker. The processing worker joins these
+    # inputs to the photo findings once both are ready.
+    draft.update(description=description, voice=voice,
+                 acknowledgement_event_id=event["id"],
+                 reply_message_at=event["message_at"].isoformat())
+    # Also covers drafts which were already at location/description during rollout.
+    if not draft.get("photo_queued"):
+        _queue_photo(conn, event, draft)
+    _save(conn, event, "processing", draft)
+    return transport.text("Thank you for submitting. We are processing your complaint now.")
+
+
+def _queue_photo(conn, event, draft):
     conn.execute(
-        """insert into whatsapp_complaints (submission_id, phone_number_id, sender_id, complaint_id)
-           values (%s,%s,%s,%s)""",
-        (draft["submission_id"], event["phone_number_id"], event["sender_id"], complaint["id"]),
+        """insert into whatsapp_processing_jobs
+           (submission_id, phone_number_id, sender_id, image_id, message_at)
+           values (%s,%s,%s,%s,%s) on conflict (submission_id) do nothing""",
+        (draft["submission_id"], event["phone_number_id"], event["sender_id"],
+         draft["image_id"], event["message_at"]),
     )
-    clear(conn, event)
-    return _result(result)
 
 
 def process(conn, event):
@@ -154,16 +146,9 @@ def process(conn, event):
         media = message.get("image", {})
         if message["type"] != "image" or transport.mime_type(media.get("mime_type")) not in transport.IMAGE_TYPES:
             return transport.text(_PHOTO_PROMPT)
-        try:
-            image, _, _ = transport.download_media(media["id"], "image")
-            ai_service.prepare_image(image)
-        except ValidationError:
-            return transport.text("That photo could not be read. " + _PHOTO_PROMPT)
-        except transport.WhatsAppError as error:
-            if error.transient:
-                raise
-            return transport.text("That photo could not be downloaded or is unsupported. " + _PHOTO_PROMPT)
         draft.update(image_id=media["id"], caption=media.get("caption", ""))
+        _queue_photo(conn, event, draft)
+        draft["photo_queued"] = True
         _save(conn, event, "location", draft)
         return transport.location_request()
     if step == "location":
@@ -180,6 +165,8 @@ def process(conn, event):
         draft.update(lat=lat, lng=lng)
         _save(conn, event, "description", draft)
         return transport.description_request()
+    if step == "processing":
+        return transport.text("Your complaint is still being reviewed. I’ll send the result when it is ready.")
     if step == "description":
         if command == "skip":
             return _submit(conn, event, draft)
