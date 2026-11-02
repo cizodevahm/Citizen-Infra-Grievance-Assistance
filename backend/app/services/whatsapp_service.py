@@ -11,6 +11,7 @@ from ..config import Config
 # httpx INFO logs full request URLs, including signed media URLs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 IMAGE_TYPES = {"image/jpeg": "jpg", "image/png": "png"}
 AUDIO_TYPES = {"audio/aac": "aac", "audio/amr": "amr", "audio/mpeg": "mp3",
@@ -95,6 +96,24 @@ def _graph(method, path, **kwargs):
         raise WhatsAppError("meta_transport", transient=True) from None
     except ValueError:
         raise WhatsAppError("meta_invalid_response", transient=True) from None
+
+
+def show_typing(phone_number_id, message_id):
+    """Best-effort read receipt and typing indicator for an incoming message."""
+    if phone_number_id != Config.WHATSAPP_PHONE_NUMBER_ID:
+        return False
+    try:
+        result = _graph("POST", f"{phone_number_id}/messages", timeout=5, json={
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+            "typing_indicator": {"type": "text"},
+        })
+        return result.get("success") is True
+    except WhatsAppError as error:
+        # Cosmetic feedback must not fail or retry the complaint transaction.
+        logger.info("WhatsApp typing indicator unavailable; category=%s", error.code)
+        return False
 
 
 def send_message(phone_number_id, sender_id, payload):

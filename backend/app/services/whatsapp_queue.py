@@ -195,6 +195,7 @@ def process_event():
             with conn.transaction():  # savepoint: errors roll back all complaint/draft work
                 if attempt > Config.WHATSAPP_MAX_ATTEMPTS:
                     raise transport.WhatsAppError("attempts_exhausted")
+                transport.show_typing(event["phone_number_id"], event["message_id"])
                 payload = conversations.process(conn, event)
                 _reply(conn, event, payload)
                 conn.execute("update whatsapp_events set status='done', attempts=%s, last_error=null where id=%s",
